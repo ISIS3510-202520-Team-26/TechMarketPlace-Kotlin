@@ -1,4 +1,4 @@
-package com.team26.techmarketplace.feature.onboarding
+package com.techmarketplace.feature.onboarding
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -20,10 +20,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.team26.techmarketplace.R
-import com.team26.techmarketplace.core.designsystem.Dimens
-import com.team26.techmarketplace.core.designsystem.GreenDark
-import com.team26.techmarketplace.core.designsystem.OffWhite
+import com.techmarketplace.R
+import com.techmarketplace.core.designsystem.Dimens
+import com.techmarketplace.core.designsystem.GreenDark
+import com.techmarketplace.core.designsystem.OffWhite
 
 // feature/onboarding/WelcomeScreen.kt
 @Composable

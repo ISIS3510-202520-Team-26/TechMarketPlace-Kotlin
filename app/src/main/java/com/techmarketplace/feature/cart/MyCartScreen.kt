@@ -1,4 +1,4 @@
-package com.team26.techmarketplace.feature.cart
+package com.techmarketplace.feature.cart
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
@@ -17,9 +17,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.team26.techmarketplace.core.designsystem.GreenDark
-import com.team26.techmarketplace.core.ui.BottomItem
-import com.team26.techmarketplace.core.ui.GreenScaffold
+import com.techmarketplace.core.designsystem.GreenDark
+import com.techmarketplace.core.ui.BottomItem
+import com.techmarketplace.core.ui.GreenScaffold
 
 @Composable
 fun MyCartScreen(onNavigateBottom: (BottomItem) -> Unit) {

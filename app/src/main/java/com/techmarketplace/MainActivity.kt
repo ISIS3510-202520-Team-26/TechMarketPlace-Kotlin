@@ -1,4 +1,4 @@
-package com.team26.techmarketplace
+package com.techmarketplace
 
 import  android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -28,10 +28,8 @@ class MainActivity : ComponentActivity() {
                 Surface(Modifier.fillMaxSize()) {
                     val nav = rememberNavController()
 
-                    // Helper para navegar entre tabs de la bottom bar
                     val navigateBottom: (BottomItem) -> Unit = { dest ->
                         nav.navigate(dest.route) {
-                            // Mantén un único destino por tab y restaura estado
                             popUpTo(nav.graph.findStartDestination().id) {
                                 saveState = true
                             }
@@ -56,7 +54,6 @@ class MainActivity : ComponentActivity() {
                             LoginScreen(
                                 onRegister = { nav.navigate("register") },
                                 onLogin = {
-                                    // Ir a Home y limpiar Auth de la pila (manteniendo estado de tabs)
                                     nav.navigate(BottomItem.Home.route) {
                                         popUpTo(nav.graph.findStartDestination().id) {
                                             saveState = true
@@ -68,11 +65,9 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable("register") {
-                            // Volver al login con back (no duplica pantallas)
                             RegisterScreen(onLoginNow = { nav.popBackStack() })
                         }
 
-                        // Tabs inferiores
                         composable(BottomItem.Home.route) {
                             HomeScreen(onNavigateBottom = navigateBottom)
                         }
@@ -84,7 +79,6 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(BottomItem.Profile.route) {
                             // TODO: agrega tu ProfileScreen con el mismo patrón que los demás
-                            // Por ahora dejamos un destino vacío para que compile y navegue.
                         }
                     }
                 }

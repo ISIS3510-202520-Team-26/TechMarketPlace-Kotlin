@@ -1,3 +1,6 @@
 <resources>
-    <string name="app_name">TechMarketPlace-Kotlin</string>
+    <string name="welcome_title">Welcome to Tech Market</string>
+    <string name="welcome_desc">Find various kinds of electronic items that are very useful for your needs</string>
+    <string name="app_name">TechMarketPlace</string>
+
 </resources>
