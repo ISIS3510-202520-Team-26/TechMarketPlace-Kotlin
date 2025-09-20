@@ -130,7 +130,6 @@ fun HomeScreen(
             }
         }
 
-        // -------- Única barra inferior --------
         Column(modifier = Modifier.align(Alignment.BottomCenter)) {
             BottomBar(selected = BottomItem.Home, onNavigate = onNavigateBottom)
             Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))

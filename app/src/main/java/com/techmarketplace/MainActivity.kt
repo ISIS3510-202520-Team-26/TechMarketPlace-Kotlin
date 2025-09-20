@@ -78,7 +78,7 @@ class MainActivity : ComponentActivity() {
                             MyCartScreen(onNavigateBottom = navigateBottom)
                         }
                         composable(BottomItem.Profile.route) {
-                            // TODO: agrega tu ProfileScreen con el mismo patrón que los demás
+                            // TODO: add profile view
                         }
                     }
                 }

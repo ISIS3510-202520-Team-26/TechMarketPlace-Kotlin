@@ -25,9 +25,8 @@ import com.techmarketplace.core.designsystem.Dimens
 import com.techmarketplace.core.designsystem.GreenDark
 import com.techmarketplace.core.designsystem.OffWhite
 
-// feature/onboarding/WelcomeScreen.kt
 @Composable
-fun WelcomeScreen(onContinue: () -> Unit) {  // <-- NUEVO parámetro
+fun WelcomeScreen(onContinue: () -> Unit) {
     Surface(modifier = Modifier.fillMaxSize(), color = GreenDark) {
         Column(modifier = Modifier.fillMaxSize()) {
             Image(

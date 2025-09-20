@@ -32,7 +32,6 @@ fun RegisterScreen(
                     .fillMaxSize()
                     .padding(horizontal = 20.dp)
             ) {
-                // bloque central
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -120,7 +119,6 @@ fun RegisterScreen(
                     }
                 }
 
-                // footer fijo: Login Now → vuelve al login
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

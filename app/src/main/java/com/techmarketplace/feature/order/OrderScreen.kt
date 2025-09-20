@@ -30,7 +30,6 @@ fun OrderScreen(
     ) {
         Column(Modifier.fillMaxSize()) {
 
-            // hoja blanca con esquinas inferiores redondeadas
             Surface(
                 color = Color.White,
                 shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
@@ -69,7 +68,6 @@ fun OrderScreen(
 
                     Spacer(Modifier.height(16.dp))
 
-                    // Lista de órdenes
                     val list = List(6) { "Logitech GT12" }
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -127,7 +125,6 @@ private fun OrderRow(title: String, subtitle: String, price: String, badge: Stri
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // imagen mini (placeholder)
             Surface(
                 modifier = Modifier
                     .size(64.dp)

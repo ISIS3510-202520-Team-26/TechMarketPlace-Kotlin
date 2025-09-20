@@ -22,7 +22,7 @@ import com.techmarketplace.core.designsystem.GreenDark
 fun LoginScreen(
     onBack: () -> Unit = {},
     onRegister: () -> Unit = {},
-    onLogin: () -> Unit = {}        // <- úsalo abajo
+    onLogin: () -> Unit = {}
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFFF2F2F2)) {
         Card(
@@ -36,7 +36,6 @@ fun LoginScreen(
                     .fillMaxSize()
                     .padding(horizontal = 20.dp),
             ) {
-                // ----- bloque central (igual que ya tienes) -----
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -130,7 +129,6 @@ fun LoginScreen(
                     }
                 }
 
-                // ----- footer: Register Now navega a Register -----
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -150,7 +148,6 @@ fun LoginScreen(
     }
 }
 
-// ---- helpers iguales que antes (TMTextField y SocialButton) ----
 @Composable
 private fun TMTextField(
     value: String,

@@ -23,13 +23,11 @@ import com.techmarketplace.core.ui.GreenScaffold
 
 @Composable
 fun MyCartScreen(onNavigateBottom: (BottomItem) -> Unit) {
-    // Datos de ejemplo
     val items = remember { List(8) { CartItem("Logitech GT12", "Mouse Wireless", 345) } }
     val qty = remember { mutableStateListOf(*IntArray(items.size) { 1 }.toTypedArray()) }
     val total by remember { derivedStateOf { items.indices.sumOf { items[it].price * qty[it] } } }
 
     GreenScaffold(selected = BottomItem.Cart, onNavigateBottom = onNavigateBottom) {
-        // ----- contenido dentro de la hoja blanca -----
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
 
@@ -48,7 +46,6 @@ fun MyCartScreen(onNavigateBottom: (BottomItem) -> Unit) {
 
             Spacer(Modifier.height(12.dp))
 
-            // Lista con hueco para el panel de checkout
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(bottom = 132.dp)
@@ -64,7 +61,6 @@ fun MyCartScreen(onNavigateBottom: (BottomItem) -> Unit) {
             }
         }
 
-        // Panel de Total + botón (anclado al fondo de la hoja)
         CheckoutPanel(
             total = total,
             onCheckout = { /* TODO */ },
