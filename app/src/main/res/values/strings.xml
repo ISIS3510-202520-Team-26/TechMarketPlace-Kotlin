@@ -2,5 +2,8 @@
     <string name="welcome_title">Welcome to Tech Market</string>
     <string name="welcome_desc">Find various kinds of electronic items that are very useful for your needs</string>
     <string name="app_name">TechMarketPlace</string>
+    <string name="default_web_client_id">
+        1234567890-abc123def456ghi789jkl.apps.googleusercontent.com
+    </string>
 
 </resources>

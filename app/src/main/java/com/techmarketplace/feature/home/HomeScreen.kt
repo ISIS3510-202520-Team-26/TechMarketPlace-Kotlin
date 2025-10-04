@@ -1,6 +1,5 @@
 package com.techmarketplace.feature.home
 
-
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -11,20 +10,28 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.ShoppingCart
-import androidx.compose.material3.*
+import androidx.compose.material3.DividerDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.techmarketplace.core.data.Category
+import com.techmarketplace.core.data.FakeDB
+import com.techmarketplace.core.data.Product
 import com.techmarketplace.core.designsystem.GreenDark
-import com.techmarketplace.core.designsystem.OffWhite
 import com.techmarketplace.core.ui.BottomBar
 import com.techmarketplace.core.ui.BottomItem
 
@@ -32,25 +39,52 @@ private val BottomBarHeight = 84.dp
 
 @Composable
 fun HomeScreen(
-    onNavigateBottom: (BottomItem) -> Unit
+    products: List<Product>,
+    selectedCategory: String?,
+    onSelectCategory: (String?) -> Unit,
+    onAddProductNavigate: () -> Unit,
+    onOpenDetail: (Product) -> Unit,
+    onNavigateBottom: (BottomItem) -> Unit,
+    @Suppress("UNUSED_PARAMETER") currentUserEmail: String? = null
+
 ) {
 
     val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val barSpace = BottomBarHeight + bottomInset
+
+    val catNameById = remember { FakeDB.categories.associate { it.id to it.name } }
+
+    var query by remember { mutableStateOf("") }
+
+    // Lista de chips: null representa "All"
+    val categories: List<Category?> = remember { listOf(null) + FakeDB.categories }
+
+    // Filtrado por categoría y por texto (nombre o categoría)
+    val filtered: List<Product> = remember(products, selectedCategory, query) {
+        val base = if (selectedCategory.isNullOrBlank()) products
+        else products.filter { it.categoryId == selectedCategory }
+
+        if (query.isBlank()) base else {
+            val q = query.trim().lowercase()
+            base.filter { p ->
+                p.name.lowercase().contains(q) ||
+                        (catNameById[p.categoryId]?.lowercase()?.contains(q) == true)
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(GreenDark)
     ) {
-
         Column(Modifier.fillMaxSize()) {
             Surface(
                 color = Color.White,
                 shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = barSpace) // deja libre el espacio de la barra
+                    .padding(bottom = barSpace)
                     .weight(1f)
             ) {
                 Column(
@@ -60,6 +94,7 @@ fun HomeScreen(
                 ) {
                     Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
 
+                    // Top bar
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -72,28 +107,51 @@ fun HomeScreen(
                             fontWeight = FontWeight.SemiBold
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            RoundIcon(Icons.Outlined.Search)
-                            RoundIcon(Icons.Outlined.ShoppingCart)
+                            RoundIcon(Icons.Outlined.Search) { /* El input está abajo */ }
+                            RoundIcon(Icons.Outlined.Add) { onAddProductNavigate() }
                         }
                     }
 
+                    Spacer(Modifier.height(10.dp))
+
+                    // Barra de búsqueda (sin KeyboardOptions)
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        singleLine = true,
+                        placeholder = { Text("Search by name or category") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = Color(0xFFF5F5F5),
+                            unfocusedContainerColor = Color(0xFFF5F5F5),
+                            focusedBorderColor = Color.Transparent,
+                            unfocusedBorderColor = Color.Transparent
+                        ),
+                        trailingIcon = {
+                            IconButton(onClick = { /* podrías ocultar teclado si quieres */ }) {
+                                Icon(Icons.Outlined.Search, contentDescription = null, tint = GreenDark)
+                            }
+                        }
+                    )
+
                     Spacer(Modifier.height(12.dp))
 
-
-                    val categories = listOf("Technology", "Books", "Supplies", "Course Materials")
-                    var selected by remember { mutableStateOf(0) }
+                    // Chips de categorías
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         items(categories.size) { i ->
-                            val isSel = i == selected
+                            val cat = categories[i]
+                            val isSel =
+                                if (cat == null) selectedCategory.isNullOrBlank()
+                                else cat.id == selectedCategory
+
                             Surface(
                                 shape = RoundedCornerShape(20.dp),
                                 color = if (isSel) GreenDark else Color(0xFFF5F5F5),
-                                tonalElevation = 0.dp,
-                                shadowElevation = 0.dp,
-                                onClick = { selected = i }
+                                onClick = { onSelectCategory(cat?.id) }
                             ) {
                                 Text(
-                                    categories[i],
+                                    text = cat?.name ?: "All",
                                     color = if (isSel) Color.White else Color(0xFF6B7783),
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                                     fontSize = 14.sp
@@ -115,8 +173,7 @@ fun HomeScreen(
 
                     Spacer(Modifier.height(12.dp))
 
-                    // Grid 2x
-                    val products = List(8) { DemoProduct("Logitech GT12", "Mouse Wireless", "$345") }
+                    // Grid de productos
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(2),
                         modifier = Modifier.fillMaxSize(),
@@ -124,7 +181,13 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         contentPadding = PaddingValues(bottom = 16.dp)
                     ) {
-                        items(products) { p -> ProductCard(product = p) }
+                        items(filtered, key = { it.id }) { p ->
+                            ProductCard(
+                                product = p,
+                                onOpen = { onOpenDetail(p) },
+                                onAdd = { /* carrito vendrá luego */ }
+                            )
+                        }
                     }
                 }
             }
@@ -138,43 +201,53 @@ fun HomeScreen(
 }
 
 @Composable
-private fun RoundIcon(icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    Surface(color = Color(0xFFF5F5F5), shape = CircleShape) {
+private fun RoundIcon(
+    icon: ImageVector,
+    onClick: () -> Unit
+) {
+    Surface(color = Color(0xFFF5F5F5), shape = CircleShape, onClick = onClick) {
         Icon(icon, contentDescription = null, tint = GreenDark, modifier = Modifier.padding(12.dp))
     }
 }
 
-private data class DemoProduct(val title: String, val subtitle: String, val price: String)
-
 @Composable
-private fun ProductCard(product: DemoProduct) {
+private fun ProductCard(
+    product: Product,
+    onOpen: () -> Unit,
+    onAdd: () -> Unit
+) {
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = Color.White,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-        border = DividerDefaults.color.copy(alpha = 0.2f).let { BorderStroke(1.dp, it) }
+        border = DividerDefaults.color.copy(alpha = 0.2f).let { BorderStroke(1.dp, it) },
+        onClick = onOpen
     ) {
         Column(Modifier.padding(12.dp)) {
-            // Imagen placeholder
+            // Placeholder de imagen
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(120.dp),
                 shape = RoundedCornerShape(12.dp),
                 color = Color(0xFF1F1F1F)
-            ) { }
+            ) {}
 
             Spacer(Modifier.height(10.dp))
 
             Text(
-                product.title,
+                product.name,
                 color = GreenDark,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Text(product.subtitle, color = Color(0xFF9AA3AB), fontSize = 12.sp)
+            Text(
+                product.seller,
+                color = Color(0xFF9AA3AB),
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
 
             Spacer(Modifier.height(10.dp))
 
@@ -183,8 +256,8 @@ private fun ProductCard(product: DemoProduct) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(product.price, color = GreenDark, fontWeight = FontWeight.SemiBold)
-                Surface(shape = CircleShape, color = Color(0xFFF5F5F5)) {
+                Text("$${product.price}", color = GreenDark, fontWeight = FontWeight.SemiBold)
+                Surface(shape = CircleShape, color = Color(0xFFF5F5F5), onClick = onAdd) {
                     Text("+", color = GreenDark, modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp))
                 }
             }

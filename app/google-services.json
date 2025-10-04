@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "54939558683",
+    "project_id": "techmarketplace-dfabc",
+    "storage_bucket": "techmarketplace-dfabc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:54939558683:android:4a51faa63e7390995ea9be",
+        "android_client_info": {
+          "package_name": "com.techmarketplace"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "54939558683-sl9qt4if2vuu5tjm448k63fckmcqas9t.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.techmarketplace",
+            "certificate_hash": "f110a683a4ad64a030e1eb66f70eb17f2cf703dc"
+          }
+        },
+        {
+          "client_id": "54939558683-ug4iv2ufdjtq4pfq1e9aa8dkattg0avn.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBcgg4jdVQ_zvn2wombLBlmYrNAQZ82WIA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "54939558683-ug4iv2ufdjtq4pfq1e9aa8dkattg0avn.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

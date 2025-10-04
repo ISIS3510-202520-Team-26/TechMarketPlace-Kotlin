@@ -1,9 +1,5 @@
-// feature/auth/LoginScreen.kt
 package com.techmarketplace.feature.auth
 
-import android.R.attr.onClick
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable   // <-- NUEVO
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -20,9 +16,9 @@ import com.techmarketplace.core.designsystem.GreenDark
 
 @Composable
 fun LoginScreen(
-    onBack: () -> Unit = {},
     onRegister: () -> Unit = {},
-    onLogin: () -> Unit = {}
+    onLogin: (String, String) -> Unit = { _, _ -> },
+    onGoogle: () -> Unit = {}
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFFF2F2F2)) {
         Card(
@@ -35,99 +31,68 @@ fun LoginScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Box(
+                Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+                Spacer(Modifier.height(24.dp))
+
+                Text(
+                    text = "Welcome! Login to\nTech Market.",
+                    color = GreenDark,
+                    fontSize = 28.sp,
+                    lineHeight = 34.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(Modifier.height(24.dp))
+
+                var email by remember { mutableStateOf("") }
+                var password by remember { mutableStateOf("") }
+
+                TMTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    placeholder = "Enter your email"
+                )
+                Spacer(Modifier.height(14.dp))
+                TMTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    placeholder = "Enter your password",
+                    isPassword = true
+                )
+
+                Spacer(Modifier.height(18.dp))
+
+                Button(
+                    onClick = { onLogin(email, password) },
+                    shape = RoundedCornerShape(28.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = GreenDark,
+                        contentColor = Color.White
+                    ),
                     modifier = Modifier
-                        .weight(1f)
                         .fillMaxWidth()
+                        .height(54.dp)
                 ) {
-                    val nudge = 20.dp
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.CenterStart)
-                            .offset(y = nudge)
-                    ) {
-                        Text(
-                            text = "Welcome! Login to\nTech Market.",
-                            color = GreenDark,
-                            fontSize = 28.sp,
-                            lineHeight = 34.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-
-                        Spacer(Modifier.height(24.dp))
-
-                        var email by remember { mutableStateOf("") }
-                        var password by remember { mutableStateOf("") }
-
-                        TMTextField(
-                            value = email,
-                            onValueChange = { email = it },
-                            placeholder = "Enter your email"
-                        )
-                        Spacer(Modifier.height(14.dp))
-                        TMTextField(
-                            value = password,
-                            onValueChange = { password = it },
-                            placeholder = "Enter your password",
-                            isPassword = true
-                        )
-
-                        Spacer(Modifier.height(8.dp))
-
-                        Text(
-                            "Forgot Password?",
-                            color = Color(0xFF9AA3AB),
-                            fontSize = 14.sp,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .wrapContentWidth(Alignment.End)
-                        )
-
-                        Spacer(Modifier.height(18.dp))
-
-                        Button(
-                            onClick = {onLogin()    },
-                            shape = RoundedCornerShape(28.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = GreenDark,
-                                contentColor = Color.White
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(54.dp)
-                        ) {
-                            Text("Login", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                        }
-
-                        Spacer(Modifier.height(24.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Divider(modifier = Modifier.weight(1f), color = Color(0xFFE6E7EB))
-                            Text(
-                                "  Or Login with  ",
-                                color = Color(0xFF9AA3AB),
-                                fontSize = 14.sp
-                            )
-                            Divider(modifier = Modifier.weight(1f), color = Color(0xFFE6E7EB))
-                        }
-
-                        Spacer(Modifier.height(16.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            SocialButton(label = "f", modifier = Modifier.weight(1f))
-                            SocialButton(label = "G", modifier = Modifier.weight(1f))
-                            SocialButton(label = "", modifier = Modifier.weight(1f))
-                        }
-                    }
+                    Text("Login", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 }
+
+                Spacer(Modifier.height(24.dp))
+
+                DividerRow(centerLabel = "Or Login with")
+
+                Spacer(Modifier.height(16.dp))
+
+                GoogleButton(
+                    text = "Continue with Google",
+                    onClick = onGoogle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                )
+
+                Spacer(Modifier.weight(1f))
 
                 Row(
                     modifier = Modifier
@@ -136,12 +101,9 @@ fun LoginScreen(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Text("Don’t have an account? ", color = Color(0xFF77838F))
-                    Text(
-                        "Register Now",
-                        color = GreenDark,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clickable { onRegister() }  // <-- AQUÍ
-                    )
+                    TextButton(onClick = onRegister) {
+                        Text("Register Now", color = GreenDark, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         }
@@ -171,7 +133,9 @@ private fun TMTextField(
             disabledContainerColor = container,
             focusedIndicatorColor = Color.Transparent,
             unfocusedIndicatorColor = Color.Transparent,
-            cursorColor = GreenDark
+            cursorColor = GreenDark,
+            focusedTextColor = Color(0xFF111827),     // ← texto visible
+            unfocusedTextColor = Color(0xFF111827)    // ← texto visible
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -180,18 +144,40 @@ private fun TMTextField(
 }
 
 @Composable
-private fun SocialButton(
-    label: String,
+private fun DividerRow(centerLabel: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Divider(modifier = Modifier.weight(1f), color = Color(0xFFE6E7EB))
+        Text("  $centerLabel  ", color = Color(0xFF9AA3AB), fontSize = 14.sp)
+        Divider(modifier = Modifier.weight(1f), color = Color(0xFFE6E7EB))
+    }
+}
+
+@Composable
+private fun GoogleButton(
+    text: String,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, Color(0xFFE6E7EB)),
+        onClick = onClick,
+        shape = RoundedCornerShape(28.dp),
         color = Color.White,
-        modifier = modifier.height(64.dp)
+        border = ButtonDefaults.outlinedButtonBorder,
+        modifier = modifier
     ) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(label, color = GreenDark, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text("G", color = GreenDark, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.width(12.dp))
+            Text(text, color = Color(0xFF111827), fontSize = 16.sp, fontWeight = FontWeight.Medium)
         }
     }
 }

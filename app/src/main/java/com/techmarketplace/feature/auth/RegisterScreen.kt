@@ -1,7 +1,6 @@
 package com.techmarketplace.feature.auth
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -18,7 +17,9 @@ import com.techmarketplace.core.designsystem.GreenDark
 
 @Composable
 fun RegisterScreen(
-    onLoginNow: () -> Unit = {}
+    onLoginNow: () -> Unit = {},
+    onRegisterClick: (String, String) -> Unit = { _, _ -> },  // ← vuelve para email/pass
+    onGoogleClick: () -> Unit = {}
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFFF2F2F2)) {
         Card(
@@ -30,94 +31,66 @@ fun RegisterScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 20.dp)
+                    .padding(horizontal = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Box(
+                Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+                Spacer(Modifier.height(24.dp))
+
+                Text(
+                    text = "Hello! Register to get\nstarted.",
+                    color = GreenDark,
+                    fontSize = 28.sp,
+                    lineHeight = 34.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(Modifier.height(24.dp))
+
+                var username by remember { mutableStateOf("") }
+                var email by remember { mutableStateOf("") }
+                var pass by remember { mutableStateOf("") }
+                var confirm by remember { mutableStateOf("") }
+
+                TMTextFieldReg(value = username, onValueChange = { username = it }, placeholder = "Username")
+                Spacer(Modifier.height(14.dp))
+                TMTextFieldReg(value = email, onValueChange = { email = it }, placeholder = "Email")
+                Spacer(Modifier.height(14.dp))
+                TMTextFieldReg(value = pass, onValueChange = { pass = it }, placeholder = "Password", isPassword = true)
+                Spacer(Modifier.height(14.dp))
+                TMTextFieldReg(value = confirm, onValueChange = { confirm = it }, placeholder = "Confirm password", isPassword = true)
+
+                Spacer(Modifier.height(18.dp))
+
+                Button(
+                    onClick = {
+                        if (pass == confirm && email.isNotBlank()) onRegisterClick(email, pass)
+                    },
+                    shape = RoundedCornerShape(28.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = GreenDark,
+                        contentColor = Color.White
+                    ),
                     modifier = Modifier
-                        .weight(1f)
                         .fillMaxWidth()
-                ) {
-                    val nudge = 20.dp
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.CenterStart)
-                            .offset(y = nudge)
-                    ) {
-                        Text(
-                            text = "Hello! Register to get\nstarted.",
-                            color = GreenDark,
-                            fontSize = 28.sp,
-                            lineHeight = 34.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        .height(54.dp)
+                ) { Text("Register", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
 
-                        Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(24.dp))
 
-                        var user by remember { mutableStateOf("") }
-                        var email by remember { mutableStateOf("") }
-                        var pass by remember { mutableStateOf("") }
-                        var confirm by remember { mutableStateOf("") }
+                DividerRow(centerLabel = "Or Register with")
 
-                        TMTextFieldReg(
-                            value = user, onValueChange = { user = it }, placeholder = "Username"
-                        )
-                        Spacer(Modifier.height(14.dp))
-                        TMTextFieldReg(
-                            value = email, onValueChange = { email = it }, placeholder = "Email"
-                        )
-                        Spacer(Modifier.height(14.dp))
-                        TMTextFieldReg(
-                            value = pass, onValueChange = { pass = it }, placeholder = "Password", isPassword = true
-                        )
-                        Spacer(Modifier.height(14.dp))
-                        TMTextFieldReg(
-                            value = confirm, onValueChange = { confirm = it }, placeholder = "Confirm password", isPassword = true
-                        )
+                Spacer(Modifier.height(16.dp))
 
-                        Spacer(Modifier.height(18.dp))
+                GoogleButton(
+                    text = "Continue with Google",
+                    onClick = onGoogleClick,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                )
 
-                        Button(
-                            onClick = { /* TODO register */ },
-                            shape = RoundedCornerShape(28.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = GreenDark,
-                                contentColor = Color.White
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(54.dp)
-                        ) {
-                            Text("Register", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                        }
-
-                        Spacer(Modifier.height(24.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Divider(modifier = Modifier.weight(1f), color = Color(0xFFE6E7EB))
-                            Text(
-                                "  Or Register with  ",
-                                color = Color(0xFF9AA3AB),
-                                fontSize = 14.sp
-                            )
-                            Divider(modifier = Modifier.weight(1f), color = Color(0xFFE6E7EB))
-                        }
-
-                        Spacer(Modifier.height(16.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            SocialButtonReg(label = "f", modifier = Modifier.weight(1f))
-                            SocialButtonReg(label = "G", modifier = Modifier.weight(1f))
-                            SocialButtonReg(label = "A", modifier = Modifier.weight(1f))
-                        }
-                    }
-                }
+                Spacer(Modifier.weight(1f))
 
                 Row(
                     modifier = Modifier
@@ -126,12 +99,9 @@ fun RegisterScreen(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Text("Already have an account? ", color = Color(0xFF77838F))
-                    Text(
-                        "Login Now",
-                        color = GreenDark,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clickable { onLoginNow() }
-                    )
+                    TextButton(onClick = onLoginNow) {
+                        Text("Login Now", color = GreenDark, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         }
@@ -161,7 +131,9 @@ private fun TMTextFieldReg(
             disabledContainerColor = container,
             focusedIndicatorColor = Color.Transparent,
             unfocusedIndicatorColor = Color.Transparent,
-            cursorColor = GreenDark
+            cursorColor = GreenDark,
+            focusedTextColor = Color(0xFF111827),      // ← texto visible
+            unfocusedTextColor = Color(0xFF111827)     // ← texto visible
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -170,18 +142,40 @@ private fun TMTextFieldReg(
 }
 
 @Composable
-private fun SocialButtonReg(
-    label: String,
+private fun DividerRow(centerLabel: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Divider(modifier = Modifier.weight(1f), color = Color(0xFFE6E7EB))
+        Text("  $centerLabel  ", color = Color(0xFF9AA3AB), fontSize = 14.sp)
+        Divider(modifier = Modifier.weight(1f), color = Color(0xFFE6E7EB))
+    }
+}
+
+@Composable
+private fun GoogleButton(
+    text: String,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, Color(0xFFE6E7EB)),
+        onClick = onClick,
+        shape = RoundedCornerShape(28.dp),
         color = Color.White,
-        modifier = modifier.height(64.dp)
+        border = BorderStroke(1.dp, Color(0xFFE6E7EB)),
+        modifier = modifier
     ) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(label, color = GreenDark, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text("G", color = GreenDark, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.width(12.dp))
+            Text(text, color = Color(0xFF111827), fontSize = 16.sp, fontWeight = FontWeight.Medium)
         }
     }
 }

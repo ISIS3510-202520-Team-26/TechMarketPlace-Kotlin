@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -44,29 +45,37 @@ android {
 }
 
 dependencies {
+    /* --------- Compose BOM --------- */
     implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.compose.ui.text)
     implementation(libs.androidx.foundation)
     androidTestImplementation(platform(libs.androidx.compose.bom))
 
+    /* --------- Compose --------- */
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.tooling.preview)
-    debugImplementation(libs.androidx.ui.tooling)
-
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.compose.foundation)
+    implementation(libs.androidx.compose.material.icons.extended)
+    implementation(libs.androidx.compose.ui.text)
 
 
+    debugImplementation(libs.androidx.ui.tooling)
+    implementation("com.google.android.material:material:1.13.0")
+
+
+    /* --------- Core Android --------- */
     implementation(libs.androidx.core.ktx)
 
+    /* --------- Tests --------- */
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    implementation(libs.material.v1120)
 
-    implementation(libs.androidx.compose.foundation)
-    implementation(libs.androidx.compose.material.icons.extended)
-
+    /* --------- Firebase Auth + Google Sign-In --------- */
+    implementation(platform(libs.firebase.bom))        // <- BOM de Firebase con platform(...)
+    implementation(libs.firebase.auth.ktx)
+    implementation(libs.play.services.auth)
 
 }
