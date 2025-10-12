@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
     id("com.google.gms.google-services")
 }
 
@@ -17,9 +18,13 @@ android {
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "API_BASE_URL", "\"http://192.168.2.13:8000/v1/\"")
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "API_BASE_URL", "\"http://192.168.2.13:8000/v1/\"")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
@@ -30,7 +35,10 @@ android {
     }
 
     // Compose
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
     composeOptions { kotlinCompilerExtensionVersion = "1.5.15" }
 
     // Recomendado para Compose moderno
@@ -59,6 +67,20 @@ dependencies {
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.ui.text)
+    implementation("com.squareup.retrofit2:converter-moshi:2.11.0")
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-kotlinx-serialization:2.11.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    implementation("androidx.compose.runtime:runtime-saveable")
+
+    // Coroutines (if not present)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+
+    // DataStore for tokens
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
+
 
 
     debugImplementation(libs.androidx.ui.tooling)
@@ -77,5 +99,17 @@ dependencies {
     implementation(platform(libs.firebase.bom))        // <- BOM de Firebase con platform(...)
     implementation(libs.firebase.auth.ktx)
     implementation(libs.play.services.auth)
+
+    implementation(libs.retrofit)
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.retrofit.kotlinx.serialization)
+
+// Coroutines (if not already)
+    implementation(libs.kotlinx.coroutines.android)
+
+// DataStore for tokens
+    implementation(libs.datastore.preferences)
 
 }

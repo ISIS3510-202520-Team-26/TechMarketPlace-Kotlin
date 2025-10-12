@@ -1,16 +1,17 @@
 package com.techmarketplace.feature.auth
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.techmarketplace.core.designsystem.GreenDark
@@ -18,7 +19,8 @@ import com.techmarketplace.core.designsystem.GreenDark
 @Composable
 fun RegisterScreen(
     onLoginNow: () -> Unit = {},
-    onRegisterClick: (String, String) -> Unit = { _, _ -> },  // ← vuelve para email/pass
+    // (name, email, pass, campus?) → matches backend register body
+    onRegisterClick: (String, String, String, String?) -> Unit = { _, _, _, _ -> },
     onGoogleClick: () -> Unit = {}
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFFF2F2F2)) {
@@ -47,24 +49,29 @@ fun RegisterScreen(
 
                 Spacer(Modifier.height(24.dp))
 
-                var username by remember { mutableStateOf("") }
-                var email by remember { mutableStateOf("") }
-                var pass by remember { mutableStateOf("") }
-                var confirm by remember { mutableStateOf("") }
+                var username by rememberSaveable { mutableStateOf("") }
+                var email by rememberSaveable { mutableStateOf("") }
+                var pass by rememberSaveable { mutableStateOf("") }
+                var confirm by rememberSaveable { mutableStateOf("") }
+                var campus by rememberSaveable { mutableStateOf("") } // optional
 
-                TMTextFieldReg(value = username, onValueChange = { username = it }, placeholder = "Username")
+                TMTextField(value = username, onValueChange = { username = it }, placeholder = "Username")
                 Spacer(Modifier.height(14.dp))
-                TMTextFieldReg(value = email, onValueChange = { email = it }, placeholder = "Email")
+                TMTextField(value = email, onValueChange = { email = it }, placeholder = "Email")
                 Spacer(Modifier.height(14.dp))
-                TMTextFieldReg(value = pass, onValueChange = { pass = it }, placeholder = "Password", isPassword = true)
+                TMTextField(value = pass, onValueChange = { pass = it }, placeholder = "Password", isPassword = true)
                 Spacer(Modifier.height(14.dp))
-                TMTextFieldReg(value = confirm, onValueChange = { confirm = it }, placeholder = "Confirm password", isPassword = true)
+                TMTextField(value = confirm, onValueChange = { confirm = it }, placeholder = "Confirm password", isPassword = true)
+                Spacer(Modifier.height(14.dp))
+                TMTextField(value = campus, onValueChange = { campus = it }, placeholder = "Campus (optional)")
 
                 Spacer(Modifier.height(18.dp))
 
                 Button(
                     onClick = {
-                        if (pass == confirm && email.isNotBlank()) onRegisterClick(email, pass)
+                        if (pass == confirm && email.isNotBlank() && username.isNotBlank()) {
+                            onRegisterClick(username, email, pass, campus.takeIf { it.isNotBlank() })
+                        }
                     },
                     shape = RoundedCornerShape(28.dp),
                     colors = ButtonDefaults.buttonColors(
@@ -74,7 +81,9 @@ fun RegisterScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(54.dp)
-                ) { Text("Register", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+                ) {
+                    Text("Register", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                }
 
                 Spacer(Modifier.height(24.dp))
 
@@ -104,78 +113,6 @@ fun RegisterScreen(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun TMTextFieldReg(
-    value: String,
-    onValueChange: (String) -> Unit,
-    placeholder: String,
-    isPassword: Boolean = false
-) {
-    val container = Color(0xFFF5F5F5)
-    val vt = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None
-
-    TextField(
-        value = value,
-        onValueChange = onValueChange,
-        singleLine = true,
-        placeholder = { Text(placeholder, color = Color(0xFF9AA3AB)) },
-        visualTransformation = vt,
-        shape = RoundedCornerShape(24.dp),
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor = container,
-            unfocusedContainerColor = container,
-            disabledContainerColor = container,
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-            cursorColor = GreenDark,
-            focusedTextColor = Color(0xFF111827),      // ← texto visible
-            unfocusedTextColor = Color(0xFF111827)     // ← texto visible
-        ),
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(54.dp)
-    )
-}
-
-@Composable
-private fun DividerRow(centerLabel: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Divider(modifier = Modifier.weight(1f), color = Color(0xFFE6E7EB))
-        Text("  $centerLabel  ", color = Color(0xFF9AA3AB), fontSize = 14.sp)
-        Divider(modifier = Modifier.weight(1f), color = Color(0xFFE6E7EB))
-    }
-}
-
-@Composable
-private fun GoogleButton(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(28.dp),
-        color = Color.White,
-        border = BorderStroke(1.dp, Color(0xFFE6E7EB)),
-        modifier = modifier
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Text("G", color = GreenDark, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.width(12.dp))
-            Text(text, color = Color(0xFF111827), fontSize = 16.sp, fontWeight = FontWeight.Medium)
         }
     }
 }

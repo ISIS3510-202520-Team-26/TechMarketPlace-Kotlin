@@ -1,5 +1,6 @@
 package com.techmarketplace
 
+import android.app.Application
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -11,6 +12,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -30,11 +34,14 @@ import com.techmarketplace.core.ui.BottomItem
 import com.techmarketplace.feature.auth.LoginScreen
 import com.techmarketplace.feature.auth.RegisterScreen
 import com.techmarketplace.feature.cart.MyCartScreen
-import com.techmarketplace.feature.home.HomeScreen
 import com.techmarketplace.feature.home.AddProductScreen
+import com.techmarketplace.feature.home.HomeScreen
 import com.techmarketplace.feature.onboarding.WelcomeScreen
 import com.techmarketplace.feature.order.OrderScreen
 import com.techmarketplace.feature.profile.ProfileScreen
+import com.techmarketplace.net.ApiClient
+import com.techmarketplace.ui.auth.LoginViewModel
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -44,17 +51,20 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Firebase
+        // 1) Init networking (Retrofit/OkHttp + TokenStore)
+        ApiClient.init(applicationContext)
+
+        // 2) Firebase
         auth = Firebase.auth
 
-        // Google Sign-In
+        // 3) Google Sign-In
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestIdToken(getString(R.string.default_web_client_id))
             .requestEmail()
             .build()
         googleClient = GoogleSignIn.getClient(this, gso)
 
-        // Launcher Google
+        // 4) Google sign-in launcher
         val googleLauncher = registerForActivityResult(
             ActivityResultContracts.StartActivityForResult()
         ) { activityResult ->
@@ -67,8 +77,31 @@ class MainActivity : ComponentActivity() {
                 val account = task.getResult(ApiException::class.java)
                 val credential = GoogleAuthProvider.getCredential(account.idToken, null)
                 auth.signInWithCredential(credential).addOnCompleteListener { t ->
-                    if (t.isSuccessful) goHome()
-                    else {
+                    if (t.isSuccessful) {
+                        val account = GoogleSignIn.getLastSignedInAccount(this@MainActivity)
+                        val email = account?.email
+                        val name = account?.displayName
+                        val gid = account?.id
+
+                        if (email == null) {
+                            Toast.makeText(this, "Google account missing email", Toast.LENGTH_SHORT).show()
+                            return@addOnCompleteListener
+                        }
+
+                        // Init networking once (if you aren’t already)
+                        com.techmarketplace.net.ApiClient.init(applicationContext)
+
+                        // Use your VM (grab it the sam e way you do in the Composable or build a repo here)
+                        val repo = com.techmarketplace.repo.AuthRepository(application)
+                        lifecycleScope.launch {
+                            val r = repo.registerWithGoogle(email, name, gid)
+                            if (r.isSuccess) {
+                                goHome()
+                            } else {
+                                Toast.makeText(this@MainActivity, r.exceptionOrNull()?.message ?: "Backend sign-in failed", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    } else {
                         Log.e("Auth", "Firebase cred error", t.exception)
                         Toast.makeText(
                             this,
@@ -95,10 +128,8 @@ class MainActivity : ComponentActivity() {
                 Surface(Modifier.fillMaxSize()) {
                     val nav = rememberNavController()
 
-                    // Estado global simple para productos (demo)
+                    // Demo state (existing fake data usage)
                     var allProducts by remember { mutableStateOf(FakeDB.products.toMutableList()) }
-
-                    val startDest = if (auth.currentUser != null) BottomItem.Home.route else "welcome"
 
                     val navigateBottom: (BottomItem) -> Unit = { dest ->
                         nav.navigate(dest.route) {
@@ -108,47 +139,69 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    // You can later make this conditional based on TokenStore.hasTokens().
+                    val startDest = "login"
+
                     NavHost(navController = nav, startDestination = startDest) {
 
-                        // Onboarding
                         composable("welcome") {
                             WelcomeScreen(onContinue = { nav.navigate("login") })
                         }
 
-                        // Login
+                        // LOGIN
                         composable("login") {
+                            val context = LocalContext.current
+                            val app = context.applicationContext as Application
+                            val authVM: LoginViewModel =
+                                viewModel(factory = LoginViewModel.factory(app))
+
                             LoginScreen(
                                 onRegister = { nav.navigate("register") },
                                 onLogin = { email, pass ->
-                                    auth.signInWithEmailAndPassword(email, pass)
-                                        .addOnCompleteListener { task ->
-                                            if (task.isSuccessful) {
-                                                goHome()
-                                            } else {
-                                                Toast.makeText(
-                                                    this@MainActivity,
-                                                    "Login fallido: ${task.exception?.localizedMessage ?: ""}",
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
+                                    authVM.login(email, pass) { ok, msg ->
+                                        if (ok) {
+                                            Toast.makeText(context, "Welcome!", Toast.LENGTH_SHORT).show()
+                                            nav.navigate(BottomItem.Home.route) {
+                                                popUpTo("login") { inclusive = true }
                                             }
+                                        } else {
+                                            Toast.makeText(context, msg ?: "Login failed", Toast.LENGTH_SHORT).show()
                                         }
+                                    }
                                 },
                                 onGoogle = { googleLauncher.launch(googleClient.signInIntent) }
                             )
                         }
 
-                        // Register (solo Google)
+                        // REGISTER
                         composable("register") {
+                            val context = LocalContext.current
+                            val app = context.applicationContext as Application
+                            val authVM: LoginViewModel =
+                                viewModel(factory = LoginViewModel.factory(app))
+
                             RegisterScreen(
                                 onLoginNow = { nav.popBackStack() },
+                                // RegisterScreen expects (name, email, pass, campus?)
+                                onRegisterClick = { name, email, pass, campus ->
+                                    authVM.register(name, email, pass, campus) { ok, msg ->
+                                        if (ok) {
+                                            Toast.makeText(context, "Account created!", Toast.LENGTH_SHORT).show()
+                                            nav.navigate(BottomItem.Home.route) {
+                                                popUpTo("login") { inclusive = true }
+                                            }
+                                        } else {
+                                            Toast.makeText(context, msg ?: "Register failed", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                },
                                 onGoogleClick = { googleLauncher.launch(googleClient.signInIntent) }
                             )
                         }
 
-                        // Home
+                        // HOME
                         composable(BottomItem.Home.route) {
                             var selectedCategory by remember { mutableStateOf<String?>(FakeDB.categories.firstOrNull()?.id) }
-
                             val products = remember(selectedCategory, allProducts) {
                                 if (selectedCategory.isNullOrBlank()) allProducts
                                 else allProducts.filter { it.categoryId == selectedCategory }
@@ -158,9 +211,8 @@ class MainActivity : ComponentActivity() {
                                 products = products,
                                 selectedCategory = selectedCategory,
                                 onSelectCategory = { catId -> selectedCategory = catId },
-                                onAddProductNavigate = { nav.navigate("addProduct") },   // ✅ coincide con HomeScreen
+                                onAddProductNavigate = { nav.navigate("addProduct") },
                                 onOpenDetail = { product ->
-                                    // TODO: navega a Detail cuando lo tengas
                                     Toast.makeText(this@MainActivity, "Detalle: ${product.name}", Toast.LENGTH_SHORT).show()
                                 },
                                 onNavigateBottom = navigateBottom,
@@ -168,7 +220,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // Add Product
+                        // ADD PRODUCT
                         composable("addProduct") {
                             AddProductScreen(
                                 categories = FakeDB.categories,
@@ -177,16 +229,16 @@ class MainActivity : ComponentActivity() {
                                 onSave = { newProduct: Product ->
                                     allProducts = (allProducts + newProduct).toMutableList()
                                     Toast.makeText(this@MainActivity, "Product added: ${newProduct.name}", Toast.LENGTH_SHORT).show()
-                                    nav.popBackStack() // volver a Home
+                                    nav.popBackStack()
                                 }
                             )
                         }
 
-                        // Order & Cart
+                        // ORDER & CART
                         composable(BottomItem.Order.route) { OrderScreen(onNavigateBottom = navigateBottom) }
                         composable(BottomItem.Cart.route) { MyCartScreen(onNavigateBottom = navigateBottom) }
 
-                        // Profile
+                        // PROFILE
                         composable(BottomItem.Profile.route) {
                             val u = auth.currentUser
                             ProfileScreen(

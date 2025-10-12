@@ -3,6 +3,12 @@ kotlin = "2.0.21"
 androidx-core-ktx = "1.13.1"
 compose-bom = "2024.09.02"
 nav-compose = "2.8.0"
+retrofit = "2.11.0"
+okhttp = "4.12.0"
+kotlinx-serialization = "1.7.3"
+datastore = "1.1.1"
+retrofit-ks-converter = "1.0.0"
+coroutines = "1.8.1"
 
 # ÚNICAS versiones para Firebase y Play Services (sin duplicados)
 firebase-bom = "33.3.0"
@@ -14,6 +20,7 @@ android-application = { id = "com.android.application", version = "8.13.0" }
 kotlin-android      = { id = "org.jetbrains.kotlin.android", version = "2.0.21" }
 kotlin-compose      = { id = "org.jetbrains.kotlin.plugin.compose", version = "2.0.21" }
 google-services     = { id = "com.google.gms.google-services", version = "4.4.2" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version = "2.0.21" }
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core-ktx" }
@@ -28,6 +35,15 @@ androidx-navigation-compose = { module = "androidx.navigation:navigation-compose
 androidx-compose-foundation = { module = "androidx.compose.foundation:foundation" }
 androidx-compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
 androidx-compose-ui-text = { module = "androidx.compose.ui:ui-text" }
+retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
+okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
+okhttp-logging = { module = "com.squareup.okhttp3:logging-interceptor", version.ref = "okhttp" }
+
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+retrofit-kotlinx-serialization = { module = "com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter", version.ref = "retrofit-ks-converter" }
+
+datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 
 # Firebase (sin versión porque usa BOM)
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebase-bom" }

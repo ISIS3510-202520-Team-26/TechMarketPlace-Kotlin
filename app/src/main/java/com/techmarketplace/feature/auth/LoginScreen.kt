@@ -3,7 +3,9 @@ package com.techmarketplace.feature.auth
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -46,8 +48,8 @@ fun LoginScreen(
 
                 Spacer(Modifier.height(24.dp))
 
-                var email by remember { mutableStateOf("") }
-                var password by remember { mutableStateOf("") }
+                var email by rememberSaveable { mutableStateOf("") }
+                var password by rememberSaveable { mutableStateOf("") }
 
                 TMTextField(
                     value = email,
@@ -111,7 +113,7 @@ fun LoginScreen(
 }
 
 @Composable
-private fun TMTextField(
+fun TMTextField(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,
@@ -134,8 +136,8 @@ private fun TMTextField(
             focusedIndicatorColor = Color.Transparent,
             unfocusedIndicatorColor = Color.Transparent,
             cursorColor = GreenDark,
-            focusedTextColor = Color(0xFF111827),     // ← texto visible
-            unfocusedTextColor = Color(0xFF111827)    // ← texto visible
+            focusedTextColor = Color(0xFF111827),
+            unfocusedTextColor = Color(0xFF111827)
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -144,19 +146,19 @@ private fun TMTextField(
 }
 
 @Composable
-private fun DividerRow(centerLabel: String) {
+fun DividerRow(centerLabel: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Divider(modifier = Modifier.weight(1f), color = Color(0xFFE6E7EB))
+        HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFE6E7EB))
         Text("  $centerLabel  ", color = Color(0xFF9AA3AB), fontSize = 14.sp)
-        Divider(modifier = Modifier.weight(1f), color = Color(0xFFE6E7EB))
+        HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFE6E7EB))
     }
 }
 
 @Composable
-private fun GoogleButton(
+fun GoogleButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -165,7 +167,7 @@ private fun GoogleButton(
         onClick = onClick,
         shape = RoundedCornerShape(28.dp),
         color = Color.White,
-        border = ButtonDefaults.outlinedButtonBorder,
+        border = ButtonDefaults.outlinedButtonBorder(enabled = true),
         modifier = modifier
     ) {
         Row(
