@@ -1,6 +1,8 @@
 package com.techmarketplace.feature.home
 
+import android.app.Application
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -8,57 +10,113 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.ExposedDropdownMenuDefaults.TrailingIcon
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.techmarketplace.R
-import com.techmarketplace.core.data.Category
-import com.techmarketplace.core.data.Product
-import com.techmarketplace.core.designsystem.GreenDark
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.techmarketplace.net.dto.CatalogItemDto
+import com.techmarketplace.ui.listings.ListingsViewModel
+import kotlin.math.roundToInt
 
+/** ROUTE: wires VM + passes catalogs/submit to the Screen */
+@Composable
+fun AddProductRoute(
+    onCancel: () -> Unit,
+    onSaved: () -> Unit
+) {
+    val ctx = LocalContext.current
+    val app = ctx.applicationContext as Application
+    val vm: ListingsViewModel = viewModel(factory = ListingsViewModel.factory(app))
+    val catalogs by vm.catalogs.collectAsState()
+
+    LaunchedEffect(Unit) { vm.refreshCatalogs() }
+
+    AddProductScreen(
+        categories = catalogs.categories,
+        brands = catalogs.brands,
+        onCancel = onCancel,
+        onSave = { title, description, categoryId, brandId, priceText, condition, quantity ->
+            val priceCents = ((priceText.toDoubleOrNull() ?: 0.0) * 100).roundToInt()
+            vm.createListing(
+                title = title,
+                description = description,
+                categoryId = categoryId,
+                brandId = brandId.ifBlank { null },
+                priceCents = priceCents,
+                currency = "COP",
+                condition = condition,
+                quantity = quantity.toIntOrNull() ?: 1,
+                latitude = null,
+                longitude = null,
+                priceSuggestionUsed = false,
+                quickViewEnabled = true
+            ) { ok, err ->
+                if (ok) {
+                    Toast.makeText(ctx, "Listing created!", Toast.LENGTH_SHORT).show()
+                    onSaved()
+                } else {
+                    Toast.makeText(ctx, err ?: "Error creating listing", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    )
+}
+
+/** SCREEN: pure UI */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddProductScreen(
-    categories: List<Category>,
-    currentUserEmail: String,
+    categories: List<CatalogItemDto>,
+    brands: List<CatalogItemDto>,
     onCancel: () -> Unit,
-    onSave: (Product) -> Unit
+    onSave: (
+        title: String,
+        description: String,
+        categoryId: String,
+        brandId: String,
+        price: String,           // plain text → converted to cents in Route
+        condition: String,       // "new" | "used"
+        quantity: String         // numeric text
+    ) -> Unit
 ) {
-    var name by remember { mutableStateOf("") }
+    var title by remember { mutableStateOf("") }
     var price by remember { mutableStateOf("") }
     var desc by remember { mutableStateOf("") }
     var selectedCat by remember { mutableStateOf(categories.firstOrNull()?.id ?: "") }
+    var selectedBrand by remember { mutableStateOf(brands.firstOrNull { it.id.isNotBlank() }?.id ?: "") }
+    var condition by remember { mutableStateOf("used") }
+    var quantity by remember { mutableStateOf("1") }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
 
-    // Selector de imagen (galería/cámara según contrato)
     val pickImage = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri -> if (uri != null) imageUri = uri }
+    ) { uri -> imageUri = uri }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Add product") },
-                navigationIcon = { TextButton(onClick = onCancel) { Text("Cancel", color = GreenDark) } },
+                navigationIcon = { TextButton(onClick = onCancel) { Text("Cancel") } },
                 actions = {
-                    val canSave = name.isNotBlank() && selectedCat.isNotBlank()
+                    val canSave = title.isNotBlank() && selectedCat.isNotBlank() && price.isNotBlank()
                     TextButton(
                         onClick = {
-                            val p = Product(
-                                id = "p" + System.currentTimeMillis(),
-                                name = name.trim(),
-                                price = price.toDoubleOrNull() ?: 0.0,
-                                photoRes = R.drawable.placeholder_generic, // placeholder temporal
-                                description = desc.trim(),
-                                seller = currentUserEmail,
-                                categoryId = selectedCat
+                            onSave(
+                                title.trim(),
+                                desc.trim(),
+                                selectedCat,
+                                selectedBrand,
+                                price.trim(),
+                                condition,
+                                quantity.trim()
                             )
-                            onSave(p)
                         },
                         enabled = canSave
-                    ) { Text("Save", color = if (canSave) GreenDark else Color.Gray) }
+                    ) { Text("Save") }
                 }
             )
         }
@@ -70,7 +128,7 @@ fun AddProductScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Imagen (placeholder visual)
+            // Image placeholder (upload step can be added later)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -97,58 +155,119 @@ fun AddProductScreen(
             ) { Text("Choose from gallery") }
 
             OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("Product name") },
+                value = title,
+                onValueChange = { title = it },
+                label = { Text("Title") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // Sin KeyboardOptions: saneamos el texto para que sea un número válido (0-9 y un punto)
             OutlinedTextField(
                 value = price,
                 onValueChange = { raw ->
-                    val cleaned = raw
-                        .replace(Regex("[^0-9.]"), "") // deja sólo dígitos y puntos
+                    // Keep only digits and a single dot
+                    val cleaned = raw.replace(Regex("[^0-9.]"), "")
                         .let { s ->
-                            // permite sólo un punto
                             val firstDot = s.indexOf('.')
-                            if (firstDot == -1) s else
-                                s.substring(0, firstDot + 1) + s.substring(firstDot + 1).replace(".", "")
+                            if (firstDot == -1) s
+                            else s.substring(0, firstDot + 1) + s.substring(firstDot + 1).replace(".", "")
                         }
                     price = cleaned
                 },
-                label = { Text("Price (USD)") },
+                label = { Text("Price (e.g. 199.99)") },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("e.g. 199.99") }
+                modifier = Modifier.fillMaxWidth()
             )
 
-            // Categoría (dropdown)
-            var expanded by remember { mutableStateOf(false) }
-            ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
+            // Category dropdown
+            var catExpanded by remember { mutableStateOf(false) }
+            ExposedDropdownMenuBox(
+                expanded = catExpanded,
+                onExpandedChange = { catExpanded = !catExpanded }
+            ) {
                 OutlinedTextField(
                     readOnly = true,
                     value = categories.firstOrNull { it.id == selectedCat }?.name ?: "",
                     onValueChange = {},
                     label = { Text("Category") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                    trailingIcon = { TrailingIcon(expanded = catExpanded) },
                     modifier = Modifier
-                        .menuAnchor(MenuAnchorType.PrimaryNotEditable) // API nueva
+                        .menuAnchor() // deprecated in some versions but compiles broadly
                         .fillMaxWidth()
                 )
-                ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                ExposedDropdownMenu(
+                    expanded = catExpanded,
+                    onDismissRequest = { catExpanded = false }
+                ) {
                     categories.forEach { cat ->
                         DropdownMenuItem(
                             text = { Text(cat.name) },
                             onClick = {
                                 selectedCat = cat.id
-                                expanded = false
+                                catExpanded = false
                             }
                         )
                     }
                 }
             }
+
+            // Brand dropdown (optional)
+            var brandExpanded by remember { mutableStateOf(false) }
+            ExposedDropdownMenuBox(
+                expanded = brandExpanded,
+                onExpandedChange = { brandExpanded = !brandExpanded }
+            ) {
+                OutlinedTextField(
+                    readOnly = true,
+                    value = brands.firstOrNull { it.id == selectedBrand }?.name ?: "",
+                    onValueChange = {},
+                    label = { Text("Brand (optional)") },
+                    trailingIcon = { TrailingIcon(expanded = brandExpanded) },
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth()
+                )
+                ExposedDropdownMenu(
+                    expanded = brandExpanded,
+                    onDismissRequest = { brandExpanded = false }
+                ) {
+                    DropdownMenuItem(text = { Text("— None —") }, onClick = {
+                        selectedBrand = ""
+                        brandExpanded = false
+                    })
+                    brands.forEach { b ->
+                        DropdownMenuItem(
+                            text = { Text(b.name) },
+                            onClick = {
+                                selectedBrand = b.id
+                                brandExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Condition
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                FilterChip(
+                    selected = condition == "used",
+                    onClick = { condition = "used" },
+                    label = { Text("Used") }
+                )
+                FilterChip(
+                    selected = condition == "new",
+                    onClick = { condition = "new" },
+                    label = { Text("New") }
+                )
+            }
+
+            OutlinedTextField(
+                value = quantity,
+                onValueChange = { quantity = it.filter { ch -> ch.isDigit() }.ifBlank { "1" } },
+                label = { Text("Quantity") },
+                singleLine = true,
+                modifier = Modifier.width(140.dp)
+            )
 
             OutlinedTextField(
                 value = desc,
