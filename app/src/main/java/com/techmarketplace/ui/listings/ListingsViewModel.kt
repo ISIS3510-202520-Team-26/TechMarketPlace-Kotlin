@@ -6,13 +6,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.techmarketplace.net.dto.CatalogItemDto
 import com.techmarketplace.net.dto.CreateListingRequest
-import com.techmarketplace.net.dto.ListingSummaryDto
-import com.techmarketplace.net.dto.SearchListingsRequest
+import com.techmarketplace.net.dto.ListingOutDto
 import com.techmarketplace.repo.ListingsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
+// --------- UI State ---------
 data class CatalogsUi(
     val categories: List<CatalogItemDto> = emptyList(),
     val brands: List<CatalogItemDto> = emptyList(),
@@ -20,32 +20,37 @@ data class CatalogsUi(
     val error: String? = null
 )
 
-data class SearchUi(
-    val items: List<ListingSummaryDto> = emptyList(),
+data class ListingsUi(
+    val items: List<ListingOutDto> = emptyList(),
+    val page: Int? = null,
+    val pageSize: Int? = null,
+    val total: Int? = null,
+    val hasNext: Boolean? = null,
     val loading: Boolean = false,
     val error: String? = null
 )
 
+// --------- ViewModel ---------
 class ListingsViewModel(private val app: Application) : ViewModel() {
 
-    private val repo by lazy { ListingsRepository(app) }
+    private val repo = ListingsRepository(app)
 
     private val _catalogs = MutableStateFlow(CatalogsUi())
     val catalogs: StateFlow<CatalogsUi> = _catalogs
 
-    private val _search = MutableStateFlow(SearchUi())
-    val search: StateFlow<SearchUi> = _search
+    private val _listings = MutableStateFlow(ListingsUi())
+    val listings: StateFlow<ListingsUi> = _listings
 
-    /** Fetch categories + brands for dropdowns */
+    /** Cargar categorías y marcas (brands opcional por categoría) */
     fun refreshCatalogs(categoryIdForBrands: String? = null) = viewModelScope.launch {
         _catalogs.value = _catalogs.value.copy(loading = true, error = null)
 
         val catsRes = repo.getCategories()
-        val brandsRes = repo.getBrands(categoryIdForBrands)
+        val brsRes = repo.getBrands(categoryIdForBrands)
 
         val cats = catsRes.getOrNull()
-        val brs = brandsRes.getOrNull()
-        val err = catsRes.exceptionOrNull()?.message ?: brandsRes.exceptionOrNull()?.message
+        val brs = brsRes.getOrNull()
+        val err = catsRes.exceptionOrNull()?.message ?: brsRes.exceptionOrNull()?.message
 
         _catalogs.value = if (cats != null && brs != null) {
             CatalogsUi(categories = cats, brands = brs, loading = false, error = null)
@@ -54,74 +59,68 @@ class ListingsViewModel(private val app: Application) : ViewModel() {
         }
     }
 
-    /** Search listings (all params optional) */
-    fun searchListings(
+    /** Listar listings (con o sin paginación) */
+    fun listListings(
         q: String? = null,
         categoryId: String? = null,
         brandId: String? = null,
-        minPrice: Int? = null,
-        maxPrice: Int? = null,
-        nearLat: Double? = null,
-        nearLon: Double? = null,
-        radiusKm: Double? = null,
         page: Int? = 1,
         pageSize: Int? = 20
     ) = viewModelScope.launch {
-        _search.value = _search.value.copy(loading = true, error = null)
+        _listings.value = _listings.value.copy(loading = true, error = null)
 
-        val req = SearchListingsRequest(
+        val res = repo.listListings(
             q = q,
-            category_id = categoryId,
-            brand_id = brandId,
-            min_price = minPrice,
-            max_price = maxPrice,
-            near_lat = nearLat,
-            near_lon = nearLon,
-            radius_km = radiusKm,
+            categoryId = categoryId,
+            brandId = brandId,
             page = page,
-            page_size = pageSize
+            pageSize = pageSize
         )
 
-        val res = repo.searchListings(req)
         val body = res.getOrNull()
         val err = res.exceptionOrNull()?.message
 
-        _search.value = if (body != null) {
-            _search.value.copy(loading = false, items = body.items, error = null)
+        _listings.value = if (body != null) {
+            _listings.value.copy(
+                loading = false,
+                items = body.items,
+                page = body.page,
+                pageSize = body.pageSize,
+                total = body.total,
+                hasNext = body.hasNext,
+                error = null
+            )
         } else {
-            _search.value.copy(loading = false, error = err ?: "Search failed")
+            _listings.value.copy(loading = false, error = err ?: "Failed to fetch listings")
         }
     }
 
-    /** Create a new listing */
+    /** Crear listing */
     fun createListing(
         title: String,
-        description: String,
+        description: String?,
         categoryId: String,
         brandId: String?,
         priceCents: Int,
         currency: String = "COP",
-        condition: String = "used",
+        condition: String? = null,
         quantity: Int = 1,
-        latitude: Double? = null,
-        longitude: Double? = null,
         priceSuggestionUsed: Boolean = false,
-        quickViewEnabled: Boolean = false,
+        quickViewEnabled: Boolean = true,
         onResult: (Boolean, String?) -> Unit
     ) = viewModelScope.launch {
         val req = CreateListingRequest(
             title = title,
             description = description,
-            category_id = categoryId,
-            brand_id = brandId,
-            price_cents = priceCents,
+            categoryId = categoryId,
+            brandId = brandId,
+            priceCents = priceCents,
             currency = currency,
             condition = condition,
             quantity = quantity,
-            latitude = latitude,
-            longitude = longitude,
-            price_suggestion_used = priceSuggestionUsed,
-            quick_view_enabled = quickViewEnabled
+            location = null, // añade si luego usas lat/lon
+            priceSuggestionUsed = priceSuggestionUsed,
+            quickViewEnabled = quickViewEnabled
         )
 
         val res = repo.createListing(req)
