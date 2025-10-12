@@ -28,13 +28,12 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
 import com.techmarketplace.core.data.FakeDB
-import com.techmarketplace.core.data.Product
 import com.techmarketplace.core.designsystem.TMTheme
 import com.techmarketplace.core.ui.BottomItem
 import com.techmarketplace.feature.auth.LoginScreen
 import com.techmarketplace.feature.auth.RegisterScreen
 import com.techmarketplace.feature.cart.MyCartScreen
-import com.techmarketplace.feature.home.AddProductScreen
+import com.techmarketplace.feature.home.AddProductRoute     // ← use Route (VM + API)
 import com.techmarketplace.feature.home.HomeScreen
 import com.techmarketplace.feature.onboarding.WelcomeScreen
 import com.techmarketplace.feature.order.OrderScreen
@@ -51,7 +50,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 1) Init networking (Retrofit/OkHttp + TokenStore)
+        // 1) Init Retrofit/OkHttp + TokenStore
         ApiClient.init(applicationContext)
 
         // 2) Firebase
@@ -78,27 +77,27 @@ class MainActivity : ComponentActivity() {
                 val credential = GoogleAuthProvider.getCredential(account.idToken, null)
                 auth.signInWithCredential(credential).addOnCompleteListener { t ->
                     if (t.isSuccessful) {
-                        val account = GoogleSignIn.getLastSignedInAccount(this@MainActivity)
-                        val email = account?.email
-                        val name = account?.displayName
-                        val gid = account?.id
+                        val acc = GoogleSignIn.getLastSignedInAccount(this@MainActivity)
+                        val email = acc?.email
+                        val name = acc?.displayName
+                        val gid = acc?.id
 
                         if (email == null) {
                             Toast.makeText(this, "Google account missing email", Toast.LENGTH_SHORT).show()
                             return@addOnCompleteListener
                         }
 
-                        // Init networking once (if you aren’t already)
-                        com.techmarketplace.net.ApiClient.init(applicationContext)
-
-                        // Use your VM (grab it the sam e way you do in the Composable or build a repo here)
                         val repo = com.techmarketplace.repo.AuthRepository(application)
                         lifecycleScope.launch {
                             val r = repo.registerWithGoogle(email, name, gid)
                             if (r.isSuccess) {
                                 goHome()
                             } else {
-                                Toast.makeText(this@MainActivity, r.exceptionOrNull()?.message ?: "Backend sign-in failed", Toast.LENGTH_LONG).show()
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    r.exceptionOrNull()?.message ?: "Backend sign-in failed",
+                                    Toast.LENGTH_LONG
+                                ).show()
                             }
                         }
                     } else {
@@ -128,7 +127,7 @@ class MainActivity : ComponentActivity() {
                 Surface(Modifier.fillMaxSize()) {
                     val nav = rememberNavController()
 
-                    // Demo state (existing fake data usage)
+                    // Still using FakeDB for Home feed (we’ll replace with backend later)
                     var allProducts by remember { mutableStateOf(FakeDB.products.toMutableList()) }
 
                     val navigateBottom: (BottomItem) -> Unit = { dest ->
@@ -139,7 +138,6 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // You can later make this conditional based on TokenStore.hasTokens().
                     val startDest = "login"
 
                     NavHost(navController = nav, startDestination = startDest) {
@@ -152,8 +150,7 @@ class MainActivity : ComponentActivity() {
                         composable("login") {
                             val context = LocalContext.current
                             val app = context.applicationContext as Application
-                            val authVM: LoginViewModel =
-                                viewModel(factory = LoginViewModel.factory(app))
+                            val authVM: LoginViewModel = viewModel(factory = LoginViewModel.factory(app))
 
                             LoginScreen(
                                 onRegister = { nav.navigate("register") },
@@ -177,12 +174,10 @@ class MainActivity : ComponentActivity() {
                         composable("register") {
                             val context = LocalContext.current
                             val app = context.applicationContext as Application
-                            val authVM: LoginViewModel =
-                                viewModel(factory = LoginViewModel.factory(app))
+                            val authVM: LoginViewModel = viewModel(factory = LoginViewModel.factory(app))
 
                             RegisterScreen(
                                 onLoginNow = { nav.popBackStack() },
-                                // RegisterScreen expects (name, email, pass, campus?)
                                 onRegisterClick = { name, email, pass, campus ->
                                     authVM.register(name, email, pass, campus) { ok, msg ->
                                         if (ok) {
@@ -199,7 +194,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // HOME
+                        // HOME (still local demo list)
                         composable(BottomItem.Home.route) {
                             var selectedCategory by remember { mutableStateOf<String?>(FakeDB.categories.firstOrNull()?.id) }
                             val products = remember(selectedCategory, allProducts) {
@@ -220,17 +215,11 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // ADD PRODUCT
+                        // ADD PRODUCT (now calls backend via VM)
                         composable("addProduct") {
-                            AddProductScreen(
-                                categories = FakeDB.categories,
-                                currentUserEmail = auth.currentUser?.email ?: "anonymous@user.dev",
+                            AddProductRoute(
                                 onCancel = { nav.popBackStack() },
-                                onSave = { newProduct: Product ->
-                                    allProducts = (allProducts + newProduct).toMutableList()
-                                    Toast.makeText(this@MainActivity, "Product added: ${newProduct.name}", Toast.LENGTH_SHORT).show()
-                                    nav.popBackStack()
-                                }
+                                onSaved = { nav.popBackStack() }
                             )
                         }
 
