@@ -113,4 +113,7 @@ dependencies {
 // DataStore for tokens
     implementation(libs.datastore.preferences)
 
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
+
 }

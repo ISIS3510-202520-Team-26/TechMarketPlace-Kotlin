@@ -23,6 +23,9 @@ import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import java.util.concurrent.TimeUnit
 import retrofit2.create
 
+import com.techmarketplace.net.api.OrdersApi
+import com.techmarketplace.net.api.PaymentsApi
+import com.techmarketplace.net.api.TelemetryApi
 @SuppressLint("StaticFieldLeak") // TokenStore keeps application context internally
 object ApiClient {
 
@@ -142,4 +145,9 @@ object ApiClient {
             .client(okHttp)
             .build()
     }
+
+    fun authApi(): AuthApi = retrofit.create(AuthApi::class.java)
+    fun telemetryApi(): TelemetryApi = retrofit.create(TelemetryApi::class.java)
+    fun ordersApi(): OrdersApi = retrofit.create(OrdersApi::class.java)
+    fun paymentsApi(): PaymentsApi = retrofit.create(PaymentsApi::class.java)
 }

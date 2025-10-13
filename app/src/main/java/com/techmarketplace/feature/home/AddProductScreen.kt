@@ -1,7 +1,12 @@
 package com.techmarketplace.feature.home
 
 import android.app.Application
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -9,6 +14,7 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults.TrailingIcon
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -16,12 +22,7 @@ import com.techmarketplace.net.dto.CatalogItemDto
 import com.techmarketplace.ui.listings.ListingsViewModel
 import kotlin.math.roundToInt
 
-/**
- * ROUTE: Conecta ViewModel y pinta la pantalla.
- * - Carga categorías y marcas
- * - Convierte el precio (texto) a cents
- * - Llama a createListing del VM (sin latitude/longitude)
- */
+/** ROUTE: conecta VM + pasa catálogos/submit a la Screen */
 @Composable
 fun AddProductRoute(
     onCancel: () -> Unit,
@@ -31,46 +32,39 @@ fun AddProductRoute(
     val app = ctx.applicationContext as Application
     val vm: ListingsViewModel = viewModel(factory = ListingsViewModel.factory(app))
 
-    val catalogs by vm.catalogs.collectAsState()
-
-    LaunchedEffect(Unit) {
-        vm.refreshCatalogs()
-    }
+    val catalogsState by vm.catalogs.collectAsState() // contiene categories & brands
+    LaunchedEffect(Unit) { vm.refreshCatalogs() }
 
     AddProductScreen(
-        categories = catalogs.categories,
-        brands = catalogs.brands,
+        categories = catalogsState.categories,
+        brands = catalogsState.brands,
         onCancel = onCancel,
-        onSave = { title, description, categoryId, brandId, priceText, condition, quantityText ->
+        onSave = { title, description, categoryId, brandId, priceText, condition, quantity ->
             val priceCents = ((priceText.toDoubleOrNull() ?: 0.0) * 100).roundToInt()
-            val qty = quantityText.toIntOrNull() ?: 1
 
+            // ⬇️ Firma mínima: SIN latitude/longitude/flags
             vm.createListing(
                 title = title,
-                description = description.ifBlank { null },
+                description = description,
                 categoryId = categoryId,
                 brandId = brandId.ifBlank { null },
                 priceCents = priceCents,
                 currency = "COP",
-                condition = condition.ifBlank { null }, // tu API lo permite null
-                quantity = qty,
-                priceSuggestionUsed = false,
-                quickViewEnabled = true
+                condition = condition,
+                quantity = quantity.toIntOrNull() ?: 1
             ) { ok, err ->
                 if (ok) {
                     Toast.makeText(ctx, "Listing created!", Toast.LENGTH_SHORT).show()
                     onSaved()
                 } else {
-                    Toast.makeText(ctx, err ?: "Error creating listing", Toast.LENGTH_LONG).show()
+                    Toast.makeText(ctx, err ?: "Error creating listing", Toast.LENGTH_SHORT).show()
                 }
             }
         }
     )
 }
 
-/**
- * SCREEN: UI pura. No asume nada del backend.
- */
+/** SCREEN: sólo UI, sin llamadas directas al backend */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddProductScreen(
@@ -81,37 +75,34 @@ fun AddProductScreen(
         title: String,
         description: String,
         categoryId: String,
-        brandId: String,   // "" si no selecciona
-        price: String,     // "199.99" -> se convierte a cents en la Route
-        condition: String, // "used" | "new" (o "")
-        quantity: String   // "1"
+        brandId: String,
+        price: String,     // texto plano → a cents en Route
+        condition: String, // "new" | "used"
+        quantity: String   // texto numérico
     ) -> Unit
 ) {
     var title by remember { mutableStateOf("") }
-    var desc by remember { mutableStateOf("") }
     var price by remember { mutableStateOf("") }
-
+    var desc by remember { mutableStateOf("") }
     var selectedCat by remember { mutableStateOf(categories.firstOrNull()?.id ?: "") }
-    var selectedBrand by remember { mutableStateOf(brands.firstOrNull()?.id ?: "") }
-
+    var selectedBrand by remember { mutableStateOf(brands.firstOrNull { it.id.isNotBlank() }?.id ?: "") }
     var condition by remember { mutableStateOf("used") }
     var quantity by remember { mutableStateOf("1") }
+    var imageUri by remember { mutableStateOf<Uri?>(null) }
 
-    // Dropdown state
-    var catExpanded by remember { mutableStateOf(false) }
-    var brandExpanded by remember { mutableStateOf(false) }
+    // Selector de imagen (galería)
+    val pickImage = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri -> imageUri = uri }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Add product") },
-                navigationIcon = {
-                    TextButton(onClick = onCancel) { Text("Cancel") }
-                },
+                navigationIcon = { TextButton(onClick = onCancel) { Text("Cancel") } },
                 actions = {
                     val canSave = title.isNotBlank() && selectedCat.isNotBlank() && price.isNotBlank()
                     TextButton(
-                        enabled = canSave,
                         onClick = {
                             onSave(
                                 title.trim(),
@@ -122,20 +113,37 @@ fun AddProductScreen(
                                 condition,
                                 quantity.trim()
                             )
-                        }
+                        },
+                        enabled = canSave
                     ) { Text("Save") }
                 }
             )
         }
-    ) { padding ->
+    ) { inner ->
         Column(
             modifier = Modifier
-                .padding(padding)
                 .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(inner)
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+            // Imagen (placeholder visual)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(160.dp)
+                    .background(Color(0xFF1F1F1F), RoundedCornerShape(12.dp)),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text("No image", color = Color.White)
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = {
+                    pickImage.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                }) { Text("Choose from gallery") }
+            }
 
             OutlinedTextField(
                 value = title,
@@ -145,14 +153,15 @@ fun AddProductScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // Precio (solo dígitos y un punto)
+            // Precio (0-9 + un solo '.')
             OutlinedTextField(
                 value = price,
                 onValueChange = { raw ->
-                    val cleaned = raw.replace(Regex("[^0-9.]"), "").let { s ->
-                        val dot = s.indexOf('.')
-                        if (dot == -1) s else s.substring(0, dot + 1) + s.substring(dot + 1).replace(".", "")
-                    }
+                    val cleaned = raw.replace(Regex("[^0-9.]"), "")
+                        .let { s ->
+                            val i = s.indexOf('.')
+                            if (i == -1) s else s.substring(0, i + 1) + s.substring(i + 1).replace(".", "")
+                        }
                     price = cleaned
                 },
                 label = { Text("Price (e.g. 199.99)") },
@@ -160,7 +169,8 @@ fun AddProductScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // Category dropdown
+            // Category
+            var catExpanded by remember { mutableStateOf(false) }
             ExposedDropdownMenuBox(
                 expanded = catExpanded,
                 onExpandedChange = { catExpanded = !catExpanded }
@@ -191,14 +201,15 @@ fun AddProductScreen(
                 }
             }
 
-            // Brand dropdown (opcional)
+            // Brand (opcional)
+            var brandExpanded by remember { mutableStateOf(false) }
             ExposedDropdownMenuBox(
                 expanded = brandExpanded,
                 onExpandedChange = { brandExpanded = !brandExpanded }
             ) {
                 OutlinedTextField(
                     readOnly = true,
-                    value = brands.firstOrNull { it.id == selectedBrand }?.name ?: "— None —",
+                    value = brands.firstOrNull { it.id == selectedBrand }?.name ?: "",
                     onValueChange = {},
                     label = { Text("Brand (optional)") },
                     trailingIcon = { TrailingIcon(expanded = brandExpanded) },
@@ -229,7 +240,7 @@ fun AddProductScreen(
                 }
             }
 
-            // Condition chips
+            // Condition
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 FilterChip(
                     selected = condition == "used",
@@ -243,45 +254,23 @@ fun AddProductScreen(
                 )
             }
 
+            // Quantity
             OutlinedTextField(
                 value = quantity,
-                onValueChange = { quantity = it.filter { ch -> ch.isDigit() }.ifBlank { "1" } },
+                onValueChange = { v -> quantity = v.filter { it.isDigit() }.ifBlank { "1" } },
                 label = { Text("Quantity") },
                 singleLine = true,
                 modifier = Modifier.width(140.dp)
             )
 
+            // Description
             OutlinedTextField(
                 value = desc,
                 onValueChange = { desc = it },
                 label = { Text("Description") },
-                minLines = 4,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 3
             )
-
-            Spacer(Modifier.height(8.dp))
-
-            // Botón secundario de guardado (opcional, ya tienes el de TopAppBar)
-            Button(
-                onClick = {
-                    if (title.isNotBlank() && selectedCat.isNotBlank() && price.isNotBlank()) {
-                        onSave(
-                            title.trim(),
-                            desc.trim(),
-                            selectedCat,
-                            selectedBrand,
-                            price.trim(),
-                            condition,
-                            quantity.trim()
-                        )
-                    }
-                },
-                enabled = title.isNotBlank() && selectedCat.isNotBlank() && price.isNotBlank(),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Save")
-            }
         }
     }
 }
