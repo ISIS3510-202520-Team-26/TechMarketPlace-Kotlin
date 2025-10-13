@@ -1,3 +1,4 @@
+// app/src/main/java/com/techmarketplace/feature/home/HomeRoute.kt
 package com.techmarketplace.feature.home
 
 import androidx.compose.foundation.BorderStroke
@@ -20,13 +21,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.techmarketplace.core.ui.BottomBar
+import com.techmarketplace.core.ui.BottomItem
 import com.techmarketplace.net.ApiClient
-import kotlinx.coroutines.launch
 import retrofit2.HttpException
+import kotlinx.coroutines.launch
 
-// --------- UI models ----------
 private data class UiCategory(val id: String, val name: String)
 private data class UiProduct(
     val id: String,
@@ -35,11 +38,13 @@ private data class UiProduct(
 )
 
 private val GreenDark = Color(0xFF0F4D3A)
+private val BottomBarHeight = 84.dp
 
 @Composable
 fun HomeRoute(
     onAddProduct: () -> Unit,
-    onOpenDetail: (String) -> Unit
+    onOpenDetail: (String) -> Unit,
+    onNavigateBottom: (BottomItem) -> Unit
 ) {
     val api = remember { ApiClient.listingApi() }
     val scope = rememberCoroutineScope()
@@ -56,14 +61,16 @@ fun HomeRoute(
     var didInitialFetch by remember { mutableStateOf(false) }
     var categoriesLoaded by remember { mutableStateOf(false) }
 
-    suspend fun listOnce(
-        q: String? = null,
-        categoryId: String? = null
-    ): List<UiProduct> {
-        // 1) Intento normal (page=1, page_size=50)
-        val res = api.listListings(
+    suspend fun listOnce(q: String? = null, categoryId: String? = null): List<UiProduct> {
+        val res = api.searchListings(
             q = q,
             categoryId = categoryId,
+            brandId = null,
+            minPrice = null,
+            maxPrice = null,
+            nearLat = null,
+            nearLon = null,
+            radiusKm = null,
             page = 1,
             pageSize = 50
         )
@@ -71,7 +78,7 @@ fun HomeRoute(
             UiProduct(
                 id = it.id,
                 title = it.title,
-                price = it.priceCents / 100.0
+                price = it.price_cents / 100.0
             )
         }
     }
@@ -80,7 +87,7 @@ fun HomeRoute(
         scope.launch {
             loading = true; error = null
             try {
-                val cats = api.getCategories().map { UiCategory(id = it.id, name = it.name) }
+                val cats = api.getCategories().map { UiCategory(it.id, it.name) }
                 categories = listOf(UiCategory(id = "", name = "All")) + cats
                 categoriesLoaded = true
             } catch (e: HttpException) {
@@ -103,14 +110,9 @@ fun HomeRoute(
                     categoryId = selectedCat?.takeIf { !it.isNullOrBlank() }
                 )
             } catch (e: HttpException) {
-                // Caso típico actual: 500 por telemetría del backend
                 val body = e.response()?.errorBody()?.string()
-                error = if (e.code() == 500) {
-                    // Mensaje claro para el usuario/desarrollador
-                    "El backend throws error, "
-                } else {
-                    "HTTP ${e.code()}${if (!body.isNullOrBlank()) " – $body" else ""}"
-                }
+                error = if (e.code() == 500) "El backend devolvió 500 al listar."
+                else "HTTP ${e.code()}${if (!body.isNullOrBlank()) " – $body" else ""}"
                 products = emptyList()
             } catch (e: Exception) {
                 error = e.message ?: "Network error"
@@ -121,38 +123,44 @@ fun HomeRoute(
         }
     }
 
-    // efectos
     LaunchedEffect(Unit) {
         if (!didInitialFetch) {
             didInitialFetch = true
-            // Siempre cargamos categorías (funciona)
             fetchCategories()
-            // Intento único de listar (si falla, mostramos estado y no reintentamos en bucle)
             fetchListings()
         }
     }
+    LaunchedEffect(selectedCat) { if (categoriesLoaded) fetchListings() }
+    LaunchedEffect(query) { if (categoriesLoaded) fetchListings() }
 
-    // Si cambias filtro o query, intentamos 1 vez más (sin loops)
-    LaunchedEffect(selectedCat) {
-        if (categoriesLoaded) fetchListings()
-    }
-    LaunchedEffect(query) {
-        if (categoriesLoaded) fetchListings()
-    }
+    val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val bottomSpace = BottomBarHeight + navInset + 8.dp
 
-    HomeScreenContent(
-        loading = loading,
-        error = error,
-        categories = categories,
-        selectedCategoryId = selectedCat,
-        onSelectCategory = { id -> selectedCat = id.takeIf { it.isNotBlank() } },
-        query = query,
-        onQueryChange = { query = it },
-        products = products,
-        onRetry = { fetchListings() },
-        onAddProduct = onAddProduct,
-        onOpenDetail = onOpenDetail
-    )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(GreenDark)
+    ) {
+        HomeScreenContent(
+            loading = loading,
+            error = error,
+            categories = categories,
+            selectedCategoryId = selectedCat,
+            onSelectCategory = { id -> selectedCat = id.takeIf { it.isNotBlank() } },
+            query = query,
+            onQueryChange = { query = it },
+            products = products,
+            onRetry = { fetchListings() },
+            onAddProduct = onAddProduct,
+            onOpenDetail = onOpenDetail,
+            bottomSpace = bottomSpace
+        )
+
+        Column(modifier = Modifier.align(Alignment.BottomCenter)) {
+            BottomBar(selected = BottomItem.Home, onNavigate = onNavigateBottom)
+            Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+        }
+    }
 }
 
 @Composable
@@ -167,121 +175,119 @@ private fun HomeScreenContent(
     products: List<UiProduct>,
     onRetry: () -> Unit,
     onAddProduct: () -> Unit,
-    onOpenDetail: (String) -> Unit
+    onOpenDetail: (String) -> Unit,
+    bottomSpace: Dp
 ) {
-    Box(
+    // 👇 IMPORTANTE: el padding inferior “recorta” el panel blanco antes del footer
+    Surface(
+        color = Color.White,
+        shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
         modifier = Modifier
             .fillMaxSize()
-            .background(GreenDark)
+            .padding(bottom = bottomSpace)
     ) {
-        Surface(
-            color = Color.White,
-            shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
-            modifier = Modifier.fillMaxSize()
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+                Text("Home", color = GreenDark, fontSize = 32.sp, fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    RoundIcon(Icons.Outlined.Search) { }
+                    RoundIcon(Icons.Outlined.Add) { onAddProduct() }
+                }
+            }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Home", color = GreenDark, fontSize = 32.sp, fontWeight = FontWeight.SemiBold)
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        RoundIcon(Icons.Outlined.Search) { }
-                        RoundIcon(Icons.Outlined.Add) { onAddProduct() }
+            Spacer(Modifier.height(10.dp))
+
+            OutlinedTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                placeholder = { Text("Search by name or category") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color(0xFFF5F5F5),
+                    unfocusedContainerColor = Color(0xFFF5F5F5),
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent
+                ),
+                trailingIcon = {
+                    IconButton(onClick = { }) {
+                        Icon(Icons.Outlined.Search, contentDescription = null, tint = GreenDark)
                     }
                 }
+            )
 
-                Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
 
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = onQueryChange,
-                    singleLine = true,
-                    placeholder = { Text("Search by name or category") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = Color(0xFFF5F5F5),
-                        unfocusedContainerColor = Color(0xFFF5F5F5),
-                        focusedBorderColor = Color.Transparent,
-                        unfocusedBorderColor = Color.Transparent
-                    ),
-                    trailingIcon = {
-                        IconButton(onClick = { }) {
-                            Icon(Icons.Outlined.Search, contentDescription = null, tint = GreenDark)
-                        }
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(categories.size) { i ->
+                    val cat = categories[i]
+                    val isSel =
+                        (cat.id.isBlank() && selectedCategoryId == null) ||
+                                (cat.id.isNotBlank() && cat.id == selectedCategoryId)
+
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = if (isSel) GreenDark else Color(0xFFF5F5F5),
+                        onClick = { onSelectCategory(cat.id) }
+                    ) {
+                        Text(
+                            text = cat.name,
+                            color = if (isSel) Color.White else Color(0xFF6B7783),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                            fontSize = 14.sp
+                        )
                     }
-                )
+                }
+            }
 
-                Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(16.dp))
 
-                // Chips de categorías (aunque listings falle, se ven porque /categories funciona)
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(categories.size) { i ->
-                        val cat = categories[i]
-                        val isSel =
-                            (cat.id.isBlank() && selectedCategoryId == null) ||
-                                    (cat.id.isNotBlank() && cat.id == selectedCategoryId)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Popular Product", color = GreenDark, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                Text("Filter", color = Color(0xFF9AA3AB), fontSize = 14.sp)
+            }
 
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = if (isSel) GreenDark else Color(0xFFF5F5F5),
-                            onClick = { onSelectCategory(cat.id) }
-                        ) {
-                            Text(
-                                text = cat.name,
-                                color = if (isSel) Color.White else Color(0xFF6B7783),
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                                fontSize = 14.sp
+            Spacer(Modifier.height(12.dp))
+
+            when {
+                loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+                error != null -> ErrorBlock(error, onRetry)
+                products.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No products yet.", color = Color(0xFF6B7783))
+                }
+                else -> {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        // ya no hace falta un padding enorme aquí
+                        contentPadding = PaddingValues(bottom = 16.dp)
+                    ) {
+                        items(products, key = { it.id }) { p ->
+                            ProductCardNew(
+                                title = p.title,
+                                seller = "",
+                                price = p.price,
+                                onOpen = { onOpenDetail(p.id) }
                             )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Popular Product", color = GreenDark, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                    Text("Filter", color = Color(0xFF9AA3AB), fontSize = 14.sp)
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                when {
-                    loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                    error != null -> ErrorBlock(error, onRetry)
-                    products.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No products yet.", color = Color(0xFF6B7783))
-                    }
-                    else -> {
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(2),
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            contentPadding = PaddingValues(bottom = 16.dp)
-                        ) {
-                            items(products, key = { it.id }) { p ->
-                                ProductCardNew(
-                                    title = p.title,
-                                    seller = "",
-                                    price = p.price,
-                                    onOpen = { onOpenDetail(p.id) }
-                                )
-                            }
                         }
                     }
                 }
@@ -291,7 +297,7 @@ private fun HomeScreenContent(
 }
 
 @Composable
-private fun ErrorBlock(message: String, onRetry: () -> Unit) {
+private fun ErrorBlock(message: String, onRetry: () -> Unit) { /* igual que antes */
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -299,28 +305,16 @@ private fun ErrorBlock(message: String, onRetry: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            "Couldn't charge the listing.",
-            color = Color(0xFFB00020),
-            fontWeight = FontWeight.SemiBold
-        )
+        Text("Couldn't charge the listing.", color = Color(0xFFB00020), fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
-        Text(
-            message,
-            color = Color(0xFF6B7783)
-        )
+        Text(message, color = Color(0xFF6B7783))
         Spacer(Modifier.height(16.dp))
-        Button(onClick = onRetry) {
-            Text("Retry")
-        }
+        Button(onClick = onRetry) { Text("Retry") }
     }
 }
 
 @Composable
-private fun RoundIcon(
-    icon: ImageVector,
-    onClick: () -> Unit
-) {
+private fun RoundIcon(icon: ImageVector, onClick: () -> Unit) { /* igual que antes */
     Surface(color = Color(0xFFF5F5F5), shape = CircleShape, onClick = onClick) {
         Icon(icon, contentDescription = null, tint = GreenDark, modifier = Modifier.padding(12.dp))
     }
@@ -332,7 +326,7 @@ private fun ProductCardNew(
     seller: String,
     price: Double,
     onOpen: () -> Unit
-) {
+) { /* igual que antes */
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = Color.White,
@@ -347,26 +341,10 @@ private fun ProductCardNew(
                 shape = RoundedCornerShape(12.dp),
                 color = Color(0xFF1F1F1F)
             ) {}
-
             Spacer(Modifier.height(10.dp))
-
-            Text(
-                title,
-                color = GreenDark,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                seller,
-                color = Color(0xFF9AA3AB),
-                fontSize = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
+            Text(title, color = GreenDark, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(seller, color = Color(0xFF9AA3AB), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(10.dp))
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,

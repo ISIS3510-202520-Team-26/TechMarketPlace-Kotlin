@@ -3,77 +3,59 @@ package com.techmarketplace.net.dto
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// -------- Catálogo (categories / brands) --------
-@Serializable
-data class CatalogItemDto(
-    @SerialName("id") val id: String,
-    @SerialName("slug") val slug: String? = null,
-    @SerialName("name") val name: String
-)
+/**
+ * Coincide con tu API:
+ * GET /v1/listings -> Page[ListingOut]
+ * donde items es una lista de ListingOut con photos.
+ */
 
-// -------- Fotos dentro del listing --------
+// ---------- Photo ----------
 @Serializable
-data class ListingPhotoOutDto(
+data class ListingPhotoDto(
     @SerialName("id") val id: String? = null,
-    @SerialName("listing_id") val listingId: String? = null,
-    @SerialName("storage_key") val storageKey: String? = null,
-    @SerialName("image_url") val imageUrl: String? = null,
+    @SerialName("listing_id") val listing_id: String? = null,
+    @SerialName("storage_key") val storage_key: String? = null,
+    @SerialName("image_url") val image_url: String? = null,
     @SerialName("width") val width: Int? = null,
     @SerialName("height") val height: Int? = null,
-    @SerialName("created_at") val createdAt: String? = null
+    @SerialName("created_at") val created_at: String? = null
 )
 
-// -------- DTO para crear listings (POST /v1/listings) --------
-@Serializable
-data class LocationDto(
-    @SerialName("latitude") val latitude: Double,
-    @SerialName("longitude") val longitude: Double
-)
-
-@Serializable
-data class CreateListingRequest(
-    @SerialName("title") val title: String,
-    @SerialName("description") val description: String? = null,
-    @SerialName("category_id") val categoryId: String,
-    @SerialName("brand_id") val brandId: String? = null,
-    @SerialName("price_cents") val priceCents: Int,
-    @SerialName("currency") val currency: String = "COP",          // 3 letras
-    @SerialName("condition") val condition: String? = null,        // "new" | "used" | ...
-    @SerialName("quantity") val quantity: Int = 1,
-    @SerialName("location") val location: LocationDto? = null,     // opcional según tu API
-    @SerialName("price_suggestion_used") val priceSuggestionUsed: Boolean = false,
-    @SerialName("quick_view_enabled") val quickViewEnabled: Boolean = true
-)
-
-// -------- ListingOut (lo que devuelve la API) --------
+// ---------- Listing (lo que devuelve el backend en listas y detalle) ----------
 @Serializable
 data class ListingOutDto(
     @SerialName("id") val id: String,
-    @SerialName("seller_id") val sellerId: String? = null,
+    @SerialName("seller_id") val seller_id: String,
     @SerialName("title") val title: String,
     @SerialName("description") val description: String,
-    @SerialName("category_id") val categoryId: String,
-    @SerialName("brand_id") val brandId: String? = null,
-    @SerialName("price_cents") val priceCents: Int,
+    @SerialName("category_id") val category_id: String,
+    @SerialName("brand_id") val brand_id: String? = null,
+    @SerialName("price_cents") val price_cents: Int,
     @SerialName("currency") val currency: String,
     @SerialName("condition") val condition: String,
     @SerialName("quantity") val quantity: Int,
-    @SerialName("is_active") val isActive: Boolean = true,
+    @SerialName("is_active") val is_active: Boolean,
     @SerialName("latitude") val latitude: Double? = null,
     @SerialName("longitude") val longitude: Double? = null,
-    @SerialName("price_suggestion_used") val priceSuggestionUsed: Boolean? = null,
-    @SerialName("quick_view_enabled") val quickViewEnabled: Boolean? = null,
-    @SerialName("created_at") val createdAt: String? = null,
-    @SerialName("updated_at") val updatedAt: String? = null,
-    @SerialName("photos") val photos: List<ListingPhotoOutDto> = emptyList()
+    @SerialName("price_suggestion_used") val price_suggestion_used: Boolean? = null,
+    @SerialName("quick_view_enabled") val quick_view_enabled: Boolean? = null,
+    @SerialName("created_at") val created_at: String? = null,
+    @SerialName("updated_at") val updated_at: String? = null,
+    @SerialName("photos") val photos: List<ListingPhotoDto> = emptyList()
 )
 
-// -------- Page[ListingOut] para GET /v1/listings --------
+// ---------- Page wrapper ----------
 @Serializable
-data class PageListingOutDto(
+data class SearchListingsResponse(
     @SerialName("items") val items: List<ListingOutDto>,
     @SerialName("total") val total: Int? = null,
     @SerialName("page") val page: Int? = null,
-    @SerialName("page_size") val pageSize: Int? = null,
-    @SerialName("has_next") val hasNext: Boolean? = null
+    @SerialName("page_size") val page_size: Int? = null,
+    @SerialName("has_next") val has_next: Boolean? = null
 )
+
+/**
+ * Si quieres un tipo separado para detalle, puedes usar el mismo ListingOutDto
+ * o declarar un alias:
+ */
+typealias ListingDetailDto = ListingOutDto

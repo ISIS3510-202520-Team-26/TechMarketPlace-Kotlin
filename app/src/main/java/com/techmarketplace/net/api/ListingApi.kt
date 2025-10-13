@@ -2,11 +2,12 @@ package com.techmarketplace.net.api
 
 import com.techmarketplace.net.dto.CatalogItemDto
 import com.techmarketplace.net.dto.CreateListingRequest
-import com.techmarketplace.net.dto.ListingOutDto
-import com.techmarketplace.net.dto.PageListingOutDto
+import com.techmarketplace.net.dto.ListingDetailDto
+import com.techmarketplace.net.dto.SearchListingsResponse
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface ListingApi {
@@ -20,19 +21,30 @@ interface ListingApi {
         @Query("category_id") categoryId: String? = null
     ): List<CatalogItemDto>
 
-    // --- Listado (Page[ListingOut]) ---
+    // --- Listados / búsqueda ---
     @GET("listings")
-    suspend fun listListings(
+    suspend fun searchListings(
         @Query("q") q: String? = null,
         @Query("category_id") categoryId: String? = null,
         @Query("brand_id") brandId: String? = null,
-        @Query("page") page: Int? = null,
-        @Query("page_size") pageSize: Int? = null
-    ): PageListingOutDto
+        @Query("min_price") minPrice: Int? = null,
+        @Query("max_price") maxPrice: Int? = null,
+        @Query("near_lat") nearLat: Double? = null,
+        @Query("near_lon") nearLon: Double? = null,
+        @Query("radius_km") radiusKm: Double? = null,
+        @Query("page") page: Int? = 1,
+        @Query("page_size") pageSize: Int? = 20
+    ): SearchListingsResponse
+
+    // --- Detalle ---
+    @GET("listings/{id}")
+    suspend fun getListingDetail(
+        @Path("id") id: String
+    ): ListingDetailDto
 
     // --- Crear listing ---
     @POST("listings")
     suspend fun createListing(
         @Body body: CreateListingRequest
-    ): ListingOutDto
+    ): ListingDetailDto
 }

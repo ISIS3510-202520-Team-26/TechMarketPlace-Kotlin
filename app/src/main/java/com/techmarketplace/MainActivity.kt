@@ -8,7 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -16,12 +16,8 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-
-// Tema y bottom items de tu proyecto
 import com.techmarketplace.core.designsystem.TMTheme
 import com.techmarketplace.core.ui.BottomItem
-
-// Pantallas existentes
 import com.techmarketplace.feature.auth.LoginScreen
 import com.techmarketplace.feature.auth.RegisterScreen
 import com.techmarketplace.feature.cart.MyCartScreen
@@ -29,27 +25,26 @@ import com.techmarketplace.feature.home.AddProductRoute
 import com.techmarketplace.feature.onboarding.WelcomeScreen
 import com.techmarketplace.feature.order.OrderScreen
 import com.techmarketplace.feature.profile.ProfileScreen
-
-// Nueva Home basada en backend (creada en feature/home/HomeRoute.kt)
-import com.techmarketplace.feature.home.HomeRoute
-
-// Net / VM
 import com.techmarketplace.net.ApiClient
 import com.techmarketplace.ui.auth.LoginViewModel
+
+import com.techmarketplace.feature.home.HomeRoute
 
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Inicializa Retrofit/OkHttp + TokenStore
+        // Init networking (no usamos aquí para el feed)
         ApiClient.init(applicationContext)
 
         setContent {
             TMTheme {
                 Surface(Modifier.fillMaxSize()) {
                     val nav = rememberNavController()
+                    val context = LocalContext.current
 
+                    // Navegación del bottom bar (recibe BottomItem)
                     val navigateBottom: (BottomItem) -> Unit = { dest ->
                         nav.navigate(dest.route) {
                             popUpTo(nav.graph.findStartDestination().id) { saveState = true }
@@ -60,15 +55,12 @@ class MainActivity : ComponentActivity() {
 
                     NavHost(navController = nav, startDestination = "login") {
 
-                        // ONBOARDING (opcional)
                         composable("welcome") {
                             WelcomeScreen(onContinue = { nav.navigate("login") })
                         }
 
-                        // LOGIN (sin Google/Firebase)
                         composable("login") {
-                            val ctx = LocalContext.current
-                            val app = ctx.applicationContext as Application
+                            val app = context.applicationContext as Application
                             val authVM: LoginViewModel =
                                 viewModel(factory = LoginViewModel.factory(app))
 
@@ -77,30 +69,21 @@ class MainActivity : ComponentActivity() {
                                 onLogin = { email, pass ->
                                     authVM.login(email, pass) { ok, msg ->
                                         if (ok) {
-                                            Toast.makeText(ctx, "Welcome!", Toast.LENGTH_SHORT)
-                                                .show()
+                                            Toast.makeText(context, "Welcome!", Toast.LENGTH_SHORT).show()
                                             nav.navigate(BottomItem.Home.route) {
                                                 popUpTo("login") { inclusive = true }
                                             }
                                         } else {
-                                            Toast.makeText(
-                                                ctx,
-                                                msg ?: "Login failed",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
+                                            Toast.makeText(context, msg ?: "Login failed", Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                 },
-                                onGoogle = {
-                                    // TODO: habilitar si luego configuran Google/Firebase
-                                }
+                                onGoogle = { /* Google deshabilitado por ahora */ }
                             )
                         }
 
-                        // REGISTER (sin Google/Firebase)
                         composable("register") {
-                            val ctx = LocalContext.current
-                            val app = ctx.applicationContext as Application
+                            val app = context.applicationContext as Application
                             val authVM: LoginViewModel =
                                 viewModel(factory = LoginViewModel.factory(app))
 
@@ -109,69 +92,62 @@ class MainActivity : ComponentActivity() {
                                 onRegisterClick = { name, email, pass, campus ->
                                     authVM.register(name, email, pass, campus) { ok, msg ->
                                         if (ok) {
-                                            Toast.makeText(
-                                                ctx,
-                                                "Account created!",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
+                                            Toast.makeText(context, "Account created!", Toast.LENGTH_SHORT).show()
                                             nav.navigate(BottomItem.Home.route) {
                                                 popUpTo("login") { inclusive = true }
                                             }
                                         } else {
-                                            Toast.makeText(
-                                                ctx,
-                                                msg ?: "Register failed",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
+                                            Toast.makeText(context, msg ?: "Register failed", Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                 },
-                                onGoogleClick = {
-                                    // TODO: habilitar si luego configuran Google/Firebase
-                                }
+                                onGoogleClick = { /* Google deshabilitado */ }
                             )
                         }
 
-                        // HOME nuevo (consume backend directo, sin FakeDB)
+                        // HOME: usa FakeDB como antes
                         composable(BottomItem.Home.route) {
                             HomeRoute(
                                 onAddProduct = { nav.navigate("addProduct") },
-                                onOpenDetail = { /* TODO: navega a detalle cuando lo crees */ }
+                                onOpenDetail = { /* TODO */ },
+                                onNavigateBottom = navigateBottom          // ← nuevo parámetro
                             )
                         }
 
-                        // ADD PRODUCT (tu Route actual que ya llama VM + API)
+                        // ADD PRODUCT (usa backend; el feed sigue siendo local)
                         composable("addProduct") {
                             AddProductRoute(
                                 onCancel = { nav.popBackStack() },
-                                onSaved = {
-                                    nav.popBackStack()
-                                    // TODO: si quieres forzar reload de Home al volver, usa SavedStateHandle
-                                }
+                                onSaved = { nav.popBackStack() }
                             )
                         }
 
-                        // ORDER & CART
+                        // ORDER: esta pantalla espera () -> Unit, así que envolvemos
                         composable(BottomItem.Order.route) {
-                            OrderScreen(onNavigateBottom = navigateBottom)
-                        }
-                        composable(BottomItem.Cart.route) {
-                            MyCartScreen(onNavigateBottom = navigateBottom)
+                            OrderScreen(
+                                onNavigateBottom = { navigateBottom(BottomItem.Home) }
+                            )
                         }
 
-                        // PROFILE (sin Firebase)
+                        // CART: idem, pasamos un lambda sin argumentos
+                        composable(BottomItem.Cart.route) {
+                            MyCartScreen(
+                                onNavigateBottom = { navigateBottom(BottomItem.Home) }
+                            )
+                        }
+
+                        // PROFILE: idem
                         composable(BottomItem.Profile.route) {
                             ProfileScreen(
-                                email = "",      // TODO: tomar de tu TokenStore/Repo cuando lo tengas
+                                email = "",
                                 photoUrl = null,
                                 onSignOut = {
-                                    // TODO: limpiar TokenStore (logout real)
                                     nav.navigate("login") {
                                         popUpTo(nav.graph.findStartDestination().id) { inclusive = true }
                                         launchSingleTop = true
                                     }
                                 },
-                                onNavigateBottom = navigateBottom
+                                onNavigateBottom = { navigateBottom(BottomItem.Home) }
                             )
                         }
                     }
