@@ -220,12 +220,6 @@ class MainActivity : ComponentActivity() {
                         }
 
                         // CART: idem, pasamos un lambda sin argumentos
-                        composable(BottomItem.Cart.route) {
-                            MyCartScreen(
-                                onNavigateBottom = { navigateBottom(BottomItem.Home) }
-                            )
-                        }
-
                         // PROFILE: idem
                         composable(BottomItem.Profile.route) {
                             val u = auth.currentUser

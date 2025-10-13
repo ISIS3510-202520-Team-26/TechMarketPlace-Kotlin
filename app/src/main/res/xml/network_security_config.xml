@@ -6,10 +6,9 @@
          You can have multiple <domain> entries inside the same <domain-config>. -->
     <domain-config cleartextTrafficPermitted="true">
         <!-- Physical device talking to your laptop/desktop over LAN -->
-        <domain includeSubdomains="true">192.168.2.13</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain>
 
         <!-- Emulator-only alias to host loopback (keep if you sometimes use the emulator) -->
-        <domain>10.0.2.2</domain>
 
         <!-- If you ever use “localhost” name via a proxy, leave this -->
         <domain>localhost</domain>
