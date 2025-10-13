@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-// --------- UI State ---------
 data class CatalogsUi(
     val categories: List<CatalogItemDto> = emptyList(),
     val brands: List<CatalogItemDto> = emptyList(),
@@ -20,59 +19,68 @@ data class CatalogsUi(
     val error: String? = null
 )
 
-data class ListingsUi(
+data class SearchUi(
     val items: List<ListingOutDto> = emptyList(),
-    val page: Int? = null,
-    val pageSize: Int? = null,
-    val total: Int? = null,
-    val hasNext: Boolean? = null,
     val loading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val page: Int = 1,
+    val pageSize: Int = 20,
+    val total: Int = 0,
+    val hasNext: Boolean = false
 )
 
-// --------- ViewModel ---------
 class ListingsViewModel(private val app: Application) : ViewModel() {
 
-    private val repo = ListingsRepository(app)
+    private val repo by lazy { ListingsRepository(app) }
 
     private val _catalogs = MutableStateFlow(CatalogsUi())
     val catalogs: StateFlow<CatalogsUi> = _catalogs
 
-    private val _listings = MutableStateFlow(ListingsUi())
-    val listings: StateFlow<ListingsUi> = _listings
+    private val _search = MutableStateFlow(SearchUi())
+    val search: StateFlow<SearchUi> = _search
 
-    /** Cargar categorías y marcas (brands opcional por categoría) */
+    /** Carga categorías y marcas para los dropdowns */
     fun refreshCatalogs(categoryIdForBrands: String? = null) = viewModelScope.launch {
         _catalogs.value = _catalogs.value.copy(loading = true, error = null)
 
         val catsRes = repo.getCategories()
-        val brsRes = repo.getBrands(categoryIdForBrands)
+        val brandsRes = repo.getBrands(categoryIdForBrands)
 
-        val cats = catsRes.getOrNull()
-        val brs = brsRes.getOrNull()
-        val err = catsRes.exceptionOrNull()?.message ?: brsRes.exceptionOrNull()?.message
+        val cats = catsRes.getOrNull().orEmpty()
+        val brs = brandsRes.getOrNull().orEmpty()
+        val err = catsRes.exceptionOrNull()?.message ?: brandsRes.exceptionOrNull()?.message
 
-        _catalogs.value = if (cats != null && brs != null) {
+        _catalogs.value = if (err == null) {
             CatalogsUi(categories = cats, brands = brs, loading = false, error = null)
         } else {
-            _catalogs.value.copy(loading = false, error = err ?: "Failed to load catalogs")
+            _catalogs.value.copy(loading = false, error = err)
         }
     }
 
-    /** Listar listings (con o sin paginación) */
-    fun listListings(
+    /** Busca listados con filtros opcionales (usa GET /v1/listings) */
+    fun searchListings(
         q: String? = null,
         categoryId: String? = null,
         brandId: String? = null,
+        minPrice: Int? = null,
+        maxPrice: Int? = null,
+        nearLat: Double? = null,
+        nearLon: Double? = null,
+        radiusKm: Double? = null,
         page: Int? = 1,
         pageSize: Int? = 20
     ) = viewModelScope.launch {
-        _listings.value = _listings.value.copy(loading = true, error = null)
+        _search.value = _search.value.copy(loading = true, error = null)
 
-        val res = repo.listListings(
+        val res = repo.searchListings(
             q = q,
             categoryId = categoryId,
             brandId = brandId,
+            minPrice = minPrice,
+            maxPrice = maxPrice,
+            nearLat = nearLat,
+            nearLon = nearLon,
+            radiusKm = radiusKm,
             page = page,
             pageSize = pageSize
         )
@@ -80,54 +88,49 @@ class ListingsViewModel(private val app: Application) : ViewModel() {
         val body = res.getOrNull()
         val err = res.exceptionOrNull()?.message
 
-        _listings.value = if (body != null) {
-            _listings.value.copy(
-                loading = false,
-                items = body.items,
-                page = body.page,
-                pageSize = body.pageSize,
-                total = body.total,
-                hasNext = body.hasNext,
-                error = null
-            )
-        } else {
-            _listings.value.copy(loading = false, error = err ?: "Failed to fetch listings")
-        }
+        _search.value =
+            if (body != null) {
+                _search.value.copy(
+                    loading = false,
+                    items = body.items,
+                    error = null,
+                    page = body.page ?: (page ?: 1),
+                    pageSize = body.page_size ?: (pageSize ?: 20),
+                    total = body.total ?: body.items.size,
+                    hasNext = body.has_next ?: false
+                )
+            } else {
+                _search.value.copy(loading = false, error = err ?: "Search failed")
+            }
     }
 
-    /** Crear listing */
+    /** Crea un listing nuevo (POST /v1/listings) */
     fun createListing(
         title: String,
-        description: String?,
+        description: String,
         categoryId: String,
         brandId: String?,
         priceCents: Int,
         currency: String = "COP",
-        condition: String? = null,
+        condition: String = "used",
         quantity: Int = 1,
-        priceSuggestionUsed: Boolean = false,
-        quickViewEnabled: Boolean = true,
         onResult: (Boolean, String?) -> Unit
     ) = viewModelScope.launch {
         val req = CreateListingRequest(
             title = title,
             description = description,
-            categoryId = categoryId,
-            brandId = brandId,
-            priceCents = priceCents,
+            category_id = categoryId,
+            brand_id = brandId,
+            price_cents = priceCents,
             currency = currency,
             condition = condition,
-            quantity = quantity,
-            location = null, // añade si luego usas lat/lon
-            priceSuggestionUsed = priceSuggestionUsed,
-            quickViewEnabled = quickViewEnabled
+            quantity = quantity
         )
-
         val res = repo.createListing(req)
         if (res.isSuccess) {
             onResult(true, null)
         } else {
-            onResult(false, res.exceptionOrNull()?.message ?: "Creation failed")
+            onResult(false, res.exceptionOrNull()?.message ?: "Creation not successful")
         }
     }
 

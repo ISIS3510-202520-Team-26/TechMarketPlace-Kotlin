@@ -41,6 +41,8 @@ import com.techmarketplace.repo.AuthRepository
 import com.techmarketplace.ui.auth.LoginViewModel
 import kotlinx.coroutines.launch
 
+import com.techmarketplace.feature.home.HomeRoute
+
 class MainActivity : ComponentActivity() {
 
     private lateinit var auth: FirebaseAuth
@@ -123,7 +125,9 @@ class MainActivity : ComponentActivity() {
             TMTheme {
                 Surface(Modifier.fillMaxSize()) {
                     val nav = rememberNavController()
+                    val context = LocalContext.current
 
+                    // Navegación del bottom bar (recibe BottomItem)
                     val navigateBottom: (BottomItem) -> Unit = { dest ->
                         nav.navigate(dest.route) {
                             popUpTo(nav.graph.findStartDestination().id) { saveState = true }
@@ -187,39 +191,36 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 },
-                                onGoogleClick = { googleLauncher.launch(googleClient.signInIntent) }
+                                onGoogleClick = { /* Google deshabilitado */ }
                             )
                         }
 
-                        // HOME
+                        // HOME: usa FakeDB como antes
                         composable(BottomItem.Home.route) {
-                            // Replace this HomeScreen implementation with your real data when ready
-                            HomeScreen(
-                                products = emptyList(),
-                                selectedCategory = null,
-                                onSelectCategory = { _ -> },
-                                onAddProductNavigate = { nav.navigate("addProduct") },
-                                onOpenDetail = { _ -> },
-                                onNavigateBottom = navigateBottom,
-                                currentUserEmail = auth.currentUser?.email
+                            HomeRoute(
+                                onAddProduct = { nav.navigate("addProduct") },
+                                onOpenDetail = { /* TODO */ },
+                                onNavigateBottom = navigateBottom          // ← nuevo parámetro
                             )
                         }
 
-                        // ADD PRODUCT (real route backed by your Listings API)
+                        // ADD PRODUCT (usa backend; el feed sigue siendo local)
                         composable("addProduct") {
                             AddProductRoute(
                                 onCancel = { nav.popBackStack() },
-                                onSaved = {
-                                    Toast.makeText(this@MainActivity, "Product created!", Toast.LENGTH_SHORT).show()
-                                    nav.popBackStack()
-                                }
+                                onSaved = { nav.popBackStack() }
                             )
                         }
 
-                        // ORDER & CART
-                        composable(BottomItem.Order.route) { OrderScreen(onNavigateBottom = navigateBottom) }
+                        // ORDER: esta pantalla espera () -> Unit, así que envolvemos
+                        composable(BottomItem.Order.route) {
+                            OrderScreen(
+                                onNavigateBottom = { navigateBottom(BottomItem.Home) }
+                            )
+                        }
 
-                        // PROFILE
+                        // CART: idem, pasamos un lambda sin argumentos
+                        // PROFILE: idem
                         composable(BottomItem.Profile.route) {
                             val u = auth.currentUser
                             ProfileScreen(
@@ -234,7 +235,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 },
-                                onNavigateBottom = navigateBottom
+                                onNavigateBottom = { navigateBottom(BottomItem.Home) }
                             )
                         }
                     }

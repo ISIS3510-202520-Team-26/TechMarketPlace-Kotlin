@@ -18,12 +18,12 @@ android {
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "API_BASE_URL", "\"http://192.168.2.13:8000/v1/\"")
+        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8000/v1/\"")
     }
 
     buildTypes {
         debug {
-            buildConfigField("String", "API_BASE_URL", "\"http://192.168.2.13:8000/v1/\"")
+            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8000/v1/\"")
         }
         release {
             isMinifyEnabled = false
@@ -112,5 +112,8 @@ dependencies {
 
 // DataStore for tokens
     implementation(libs.datastore.preferences)
+
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
 
 }
