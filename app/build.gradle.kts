@@ -18,12 +18,12 @@ android {
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8000/v1/\"")
+        buildConfigField("String", "API_BASE_URL", "\"http://192.168.2.13:8000/v1/\"")
     }
 
     buildTypes {
         debug {
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8000/v1/\"")
+            buildConfigField("String", "API_BASE_URL", "\"http://192.168.2.13:8000/v1/\"")
         }
         release {
             isMinifyEnabled = false
@@ -56,6 +56,7 @@ dependencies {
     /* --------- Compose BOM --------- */
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.foundation)
+    implementation(libs.firebase.crashlytics.buildtools)
     androidTestImplementation(platform(libs.androidx.compose.bom))
 
     /* --------- Compose --------- */

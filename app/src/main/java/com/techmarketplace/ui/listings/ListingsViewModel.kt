@@ -130,7 +130,7 @@ class ListingsViewModel(private val app: Application) : ViewModel() {
         if (res.isSuccess) {
             onResult(true, null)
         } else {
-            onResult(false, res.exceptionOrNull()?.message ?: "Creation failed")
+            onResult(false, res.exceptionOrNull()?.message ?: "Creation not successful")
         }
     }
 

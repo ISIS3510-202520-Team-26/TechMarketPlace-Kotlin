@@ -43,13 +43,6 @@ class LoginViewModel(private val app: Application) : ViewModel() {
         }
     }
 
-    fun registerWithGoogle(email: String, displayName: String?, googleId: String?, onResult: (Boolean, String?) -> Unit) {
-        viewModelScope.launch {
-            val r = repo.registerWithGoogle(email, displayName, googleId)
-            onResult(r.isSuccess, r.exceptionOrNull()?.message)
-        }
-    }
-
 
     companion object {
         fun factory(app: Application): ViewModelProvider.Factory =

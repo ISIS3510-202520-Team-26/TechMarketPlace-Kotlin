@@ -33,3 +33,8 @@ data class UserMe(
     val name: String,
     val email: String
 )
+
+@Serializable
+data class GoogleLoginRequest(
+    @kotlinx.serialization.SerialName("id_token") val id_token: String
+)

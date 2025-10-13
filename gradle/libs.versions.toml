@@ -14,6 +14,7 @@ coroutines = "1.8.1"
 firebase-bom = "33.3.0"
 play-services-auth = "21.2.0"
 foundation = "1.9.2"
+firebase-crashlytics-buildtools = "3.0.6"
 
 [plugins]
 android-application = { id = "com.android.application", version = "8.13.0" }
@@ -59,3 +60,4 @@ androidx-espresso-core = { module = "androidx.test.espresso:espresso-core", vers
 
 androidx-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 androidx-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundation" }
+firebase-crashlytics-buildtools = { group = "com.google.firebase", name = "firebase-crashlytics-buildtools", version.ref = "firebase-crashlytics-buildtools" }

@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import com.techmarketplace.BuildConfig
 import com.techmarketplace.net.api.AuthApi
+import com.techmarketplace.net.api.ListingApi
 import com.techmarketplace.net.dto.RefreshRequest
 import com.techmarketplace.storage.TokenStore
 import kotlinx.coroutines.flow.firstOrNull
@@ -20,7 +21,6 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import java.util.concurrent.TimeUnit
-import com.techmarketplace.net.api.ListingApi
 import retrofit2.create
 
 import com.techmarketplace.net.api.OrdersApi
@@ -38,12 +38,11 @@ object ApiClient {
         explicitNulls = false
         encodeDefaults = true
     }
-    fun listingApi(): ListingApi = retrofit.create()
 
-    /**
-     * Call once from Application or Activity before using any API:
-     * ApiClient.init(applicationContext)
-     */
+    fun listingApi(): ListingApi = retrofit.create()
+    fun authApi(): AuthApi = retrofit.create()
+
+    /** Call once from Application or Activity: ApiClient.init(applicationContext) */
     fun init(appContext: Context) {
         if (this::tokenStore.isInitialized) return
         tokenStore = TokenStore(appContext)
@@ -54,24 +53,32 @@ object ApiClient {
             else HttpLoggingInterceptor.Level.NONE
         }
 
-        // Adds Authorization header if we have an access token
+        // Adds Authorization header if we have an access token (but NOT for /auth/* endpoints)
         val authHeaderInterceptor = Interceptor { chain ->
             val original = chain.request()
+            val path = original.url.encodedPath // e.g. /v1/auth/login
+            val isAuthCall = path.contains("/auth/")
+
             val builder = original.newBuilder()
                 .header("Accept", "application/json")
 
-            val token = runBlocking { tokenStore.accessToken.firstOrNull() }
-            if (!token.isNullOrBlank()) {
-                builder.header("Authorization", "Bearer $token")
+            if (!isAuthCall) {
+                val token = runBlocking { tokenStore.accessToken.firstOrNull() }
+                if (!token.isNullOrBlank()) {
+                    builder.header("Authorization", "Bearer $token")
+                }
             }
             chain.proceed(builder.build())
         }
 
-        // On 401, try to refresh once and retry original request
+        // On 401, try to refresh once and retry original request (but NOT for /auth/* endpoints)
         val refreshAuthenticator = object : Authenticator {
             override fun authenticate(route: Route?, response: Response): Request? {
-                // Avoid infinite loops
-                if (response.priorResponse != null) return null
+                // Avoid loops (count prior responses)
+                if (responseCount(response) >= 2) return null
+
+                val path = response.request.url.encodedPath
+                if (path.contains("/auth/")) return null // never refresh for /auth/*
 
                 val currentAccess = runBlocking { tokenStore.accessToken.firstOrNull() }
                 val requestAuth = response.request.header("Authorization")
@@ -82,9 +89,7 @@ object ApiClient {
                         // Minimal Retrofit instance (no auth) just to call /auth/refresh
                         val plainRetrofit = Retrofit.Builder()
                             .baseUrl(BuildConfig.API_BASE_URL) // must end with /
-                            .addConverterFactory(
-                                json.asConverterFactory("application/json".toMediaType())
-                            )
+                            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
                             .client(
                                 OkHttpClient.Builder()
                                     .connectTimeout(15, TimeUnit.SECONDS)
@@ -113,6 +118,16 @@ object ApiClient {
                 }
                 return null
             }
+
+            private fun responseCount(response: Response): Int {
+                var r: Response? = response
+                var count = 1
+                while (r?.priorResponse != null) {
+                    count++
+                    r = r.priorResponse
+                }
+                return count
+            }
         }
 
         okHttp = OkHttpClient.Builder()
@@ -125,7 +140,7 @@ object ApiClient {
             .build()
 
         retrofit = Retrofit.Builder()
-            .baseUrl(BuildConfig.API_BASE_URL) // e.g. http://10.0.2.2:8000/v1/
+            .baseUrl(BuildConfig.API_BASE_URL) // e.g. http://10.0.2.2:8000/v1/ or http://<LAN_IP>:8000/v1/
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .client(okHttp)
             .build()

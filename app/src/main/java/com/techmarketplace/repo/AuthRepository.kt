@@ -1,8 +1,11 @@
 package com.techmarketplace.repo
 
 import android.content.Context
+import java.io.IOException
+import retrofit2.HttpException
 import com.techmarketplace.net.ApiClient
 import com.techmarketplace.net.api.AuthApi
+import com.techmarketplace.net.dto.GoogleLoginRequest
 import com.techmarketplace.net.dto.LoginRequest
 import com.techmarketplace.net.dto.RegisterRequest
 import com.techmarketplace.net.dto.UserMe
@@ -30,13 +33,19 @@ class AuthRepository(context: Context) {
         email: String,
         password: String,
         campus: String?
-    ): Result<Unit> = runCatching {
-        // network on IO
-        val tokens = withContext(Dispatchers.IO) {
-            api.register(RegisterRequest(name = name, email = email, password = password, campus = campus))
-        }
-        // persist tokens
-        store.saveTokens(tokens.access_token, tokens.refresh_token)
+    ): Result<Unit> = safeCall {
+        // 1) Create account (returns user)
+        api.register(RegisterRequest(name, email, password, campus))
+
+        // 2) Immediately login to obtain tokens
+        val pair = api.login(LoginRequest(email, password))
+
+        // 3) Persist tokens
+        store.saveTokens(pair.access_token, pair.refresh_token)
+
+        // 4) (Optional) fetch me to warm cache or verify
+        // val me = api.me()
+
         Unit
     }
 
@@ -56,31 +65,10 @@ class AuthRepository(context: Context) {
     }
 
     // in AuthRepository.kt
-    suspend fun registerWithGoogle(
-        email: String,
-        displayName: String?,
-        googleId: String?
-    ): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
-            // Derive a stable, app-local password (TEMPORARY approach for demo).
-            // Uses Google ID if available; otherwise falls back to email.
-            val base = (googleId ?: email).trim()
-            val tempPassword = "G!" + base.reversed() + "#aA3"  // not for production security
-
-            val name = (displayName?.takeIf { it.isNotBlank() }
-                ?: email.substringBefore("@").ifBlank { "User" })
-
-            try {
-                api.register(RegisterRequest(name = name, email = email, password = tempPassword, campus = null))
-            } catch (e: retrofit2.HttpException) {
-                // If the email is already registered (409), continue to login
-                if (e.code() != 409) throw e
-            }
-
-            val pair = api.login(LoginRequest(email = email, password = tempPassword))
-            store.saveTokens(pair.access_token, pair.refresh_token)
-            Unit
-        }
+    suspend fun loginWithGoogle(idToken: String): Result<Unit> = runCatching {
+        val pair = api.loginWithGoogle(GoogleLoginRequest(id_token = idToken))
+        store.saveTokens(pair.access_token, pair.refresh_token)
+        Unit
     }
 
 
@@ -97,4 +85,18 @@ class AuthRepository(context: Context) {
     suspend fun logout() {
         store.clear()
     }
+
+    private suspend fun <T> safeCall(block: suspend () -> T): Result<T> =
+        withContext(Dispatchers.IO) {
+            try {
+                Result.success(block())
+            } catch (e: HttpException) {
+                Result.failure(e)
+            } catch (e: IOException) {
+                Result.failure(e)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+
+        }
 }
