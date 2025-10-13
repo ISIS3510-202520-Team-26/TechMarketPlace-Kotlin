@@ -8,7 +8,7 @@ import retrofit2.http.POST
 interface AuthApi {
 
     @POST("auth/register")
-    suspend fun register(@Body body: RegisterRequest): TokenPair
+    suspend fun register(@Body body: RegisterRequest): UserMe
 
     @POST("auth/login")
     suspend fun login(@Body body: LoginRequest): TokenPair
@@ -18,4 +18,7 @@ interface AuthApi {
 
     @GET("auth/me")
     suspend fun me(): UserMe
+
+    @POST("auth/google") // adjust if your backend uses a different path
+    suspend fun loginWithGoogle(@Body body: GoogleLoginRequest): TokenPair
 }
