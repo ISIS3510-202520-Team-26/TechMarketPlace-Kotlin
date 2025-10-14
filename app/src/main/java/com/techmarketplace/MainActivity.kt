@@ -149,23 +149,35 @@ class MainActivity : ComponentActivity() {
                         composable("login") {
                             val context = LocalContext.current
                             val app = context.applicationContext as Application
-                            val authVM: LoginViewModel =
-                                viewModel(factory = LoginViewModel.factory(app))
+                            val authVM: LoginViewModel = viewModel(factory = LoginViewModel.factory(app))
+                            val ui = authVM.ui.collectAsState().value
 
                             LoginScreen(
+                                // state (so banners & field errors show)
+                                loading = ui.loading,
+                                isOnline = ui.isOnline,
+                                bannerMessage = ui.bannerMessage,
+                                onDismissBanner = authVM::clearBanner,
+                                emailError = ui.emailError,
+                                passwordError = ui.passwordError,
+
                                 onRegister = { nav.navigate("register") },
+
+                                // NEW: one-arg callback
                                 onLogin = { email, pass ->
-                                    authVM.login(email, pass) { ok, msg ->
+                                    authVM.login(email, pass) { ok ->
                                         if (ok) {
-                                            Toast.makeText(context, "Welcome!", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, getString(R.string.welcome_toast), Toast.LENGTH_SHORT).show()
                                             nav.navigate(BottomItem.Home.route) {
                                                 popUpTo("login") { inclusive = true }
+                                                launchSingleTop = true
+                                                restoreState = true
                                             }
-                                        } else {
-                                            Toast.makeText(context, msg ?: "Login failed", Toast.LENGTH_SHORT).show()
                                         }
+                                        // else: errors already shown by the screen via ui.*
                                     }
                                 },
+
                                 onGoogle = { googleLauncher.launch(googleClient.signInIntent) }
                             )
                         }
@@ -174,24 +186,37 @@ class MainActivity : ComponentActivity() {
                         composable("register") {
                             val context = LocalContext.current
                             val app = context.applicationContext as Application
-                            val authVM: LoginViewModel =
-                                viewModel(factory = LoginViewModel.factory(app))
+                            val authVM: LoginViewModel = viewModel(factory = LoginViewModel.factory(app))
+                            val ui = authVM.ui.collectAsState().value
 
                             RegisterScreen(
+                                // state (so banners & field errors show)
+                                loading = ui.loading,
+                                isOnline = ui.isOnline,
+                                bannerMessage = ui.bannerMessage,
+                                onDismissBanner = authVM::clearBanner,
+                                nameError = ui.nameError,
+                                emailError = ui.emailError,
+                                passwordError = ui.passwordError,
+
                                 onLoginNow = { nav.popBackStack() },
+
+                                // NEW: one-arg callback
                                 onRegisterClick = { name, email, pass, campus ->
-                                    authVM.register(name, email, pass, campus) { ok, msg ->
+                                    authVM.register(name, email, pass, campus) { ok ->
                                         if (ok) {
-                                            Toast.makeText(context, "Account created!", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, getString(R.string.account_created_toast), Toast.LENGTH_SHORT).show()
                                             nav.navigate(BottomItem.Home.route) {
                                                 popUpTo("login") { inclusive = true }
+                                                launchSingleTop = true
+                                                restoreState = true
                                             }
-                                        } else {
-                                            Toast.makeText(context, msg ?: "Register failed", Toast.LENGTH_SHORT).show()
                                         }
+                                        // else: errors already shown by the screen via ui.*
                                     }
                                 },
-                                onGoogleClick = { /* Google deshabilitado */ }
+
+                                onGoogleClick = { /* opcional por ahora */ }
                             )
                         }
 

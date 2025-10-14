@@ -1,9 +1,64 @@
 <resources>
+    <!-- Existing -->
     <string name="welcome_title">Welcome to Tech Market</string>
     <string name="welcome_desc">Find various kinds of electronic items that are very useful for your needs</string>
     <string name="app_name">TechMarketPlace</string>
-    <string name="default_web_client_id">
-        1234567890-abc123def456ghi789jkl.apps.googleusercontent.com
-    </string>
+    <string name="default_web_client_id">1234567890-abc123def456ghi789jkl.apps.googleusercontent.com</string>
 
+    <!-- Auth: field labels -->
+    <string name="auth_name_label">Name</string>
+    <string name="auth_email_label">Email</string>
+    <string name="auth_password_label">Password</string>
+    <string name="auth_confirm_password_label">Confirm password</string>
+    <string name="auth_campus_label">Campus (optional)</string>
+
+    <!-- Auth: actions & titles -->
+    <string name="auth_login_title">Sign in</string>
+    <string name="auth_register_title">Create account</string>
+    <string name="auth_sign_in">Sign in</string>
+    <string name="auth_sign_up">Sign up</string>
+    <string name="auth_log_in_cta">Log in</string>
+    <string name="auth_register_cta">Register</string>
+    <string name="auth_forgot_password">Forgot password?</string>
+    <string name="auth_or">or</string>
+    <string name="auth_continue_with_google">Continue with Google</string>
+    <string name="auth_show_password">Show password</string>
+    <string name="auth_hide_password">Hide password</string>
+
+    <!-- Status / progress -->
+    <string name="status_logging_in">Signing you in…</string>
+    <string name="status_registering">Creating your account…</string>
+
+    <!-- Inline validation (field-level; show as supporting text under TextField) -->
+    <string name="error_validation_email_format">Enter a valid email address.</string>
+    <string name="error_validation_name_too_short">Name must be at least 2 characters.</string>
+    <string name="error_validation_password_too_short">Password must be at least 8 characters.</string>
+    <string name="error_validation_password_mismatch">Passwords don’t match.</string>
+
+    <!-- Auth/business errors -->
+    <string name="error_invalid_credentials">Email or password is incorrect.</string>
+    <string name="error_duplicate_email">That email is already registered.</string>
+
+    <!-- Transient/system errors (snackbars) -->
+    <string name="error_server_generic">Something went wrong on our side. Try again.</string>
+    <string name="error_offline">You’re offline. Check your connection and try again.</string>
+    <string name="error_unknown">Something went wrong. Please try again.</string>
+
+    <!-- Banner / snackbar actions -->
+    <string name="action_retry">Retry</string>
+    <string name="action_login">Log in</string>
+    <string name="action_ok">OK</string>
+    <string name="action_cancel">Cancel</string>
+
+    <string name="welcome_toast">Welcome!</string>
+    <string name="account_created_toast">Account created!</string>
+
+    <string name="google_login_cancelled">Login canceled by user</string>
+    <string name="google_id_token_missing">Google ID token missing</string>
+    <string name="backend_google_login_failed">Backend Google login failed</string>
+
+    <!-- These two accept details -->
+    <string name="firebase_cred_error_with_msg">Firebase error: %1$s</string>
+    <string name="google_signin_failed_with_code">Google sign-in failed (code=%1$d). Check SHA and default_web_client_id.</string>
+    <string name="google_signin_exception_with_msg">Exception: %1$s</string>
 </resources>
