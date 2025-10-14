@@ -1,93 +1,59 @@
 package com.techmarketplace.ui.listings
 
 import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewmodel.CreationExtras
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.lifecycle.viewModelScope
 import com.techmarketplace.net.ApiClient
 import com.techmarketplace.net.dto.CatalogItemDto
-import com.techmarketplace.net.dto.CreateListingRequest
-import com.techmarketplace.net.dto.LocationIn
+import com.techmarketplace.net.dto.SearchListingsResponse
+import com.techmarketplace.repo.ListingsRepository
+import com.techmarketplace.storage.LocationStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 
-data class CatalogsUiState(
-    val loading: Boolean = false,
-    val error: String? = null,
+data class CatalogsState(
     val categories: List<CatalogItemDto> = emptyList(),
     val brands: List<CatalogItemDto> = emptyList()
 )
 
 class ListingsViewModel(
-    private val app: Application
-) : ViewModel() {
+    app: Application,
+    private val repo: ListingsRepository
+) : AndroidViewModel(app) {
 
-    private val listingApi = ApiClient.listingApi()
+    private val _catalogs = MutableStateFlow(CatalogsState())
+    val catalogs: StateFlow<CatalogsState> = _catalogs
 
-    private val _catalogs = MutableStateFlow(CatalogsUiState())
-    val catalogs: StateFlow<CatalogsUiState> = _catalogs
-
-    /** Carga categorías y marcas del backend */
-    fun refreshCatalogs(categoryFilter: String? = null) {
+    fun refreshCatalogs(categoryIdForBrands: String? = null) {
         viewModelScope.launch {
-            _catalogs.update { it.copy(loading = true, error = null) }
             try {
-                val cats = listingApi.getCategories()
-                val brs = listingApi.getBrands(categoryId = categoryFilter)
-                _catalogs.update {
-                    it.copy(
-                        loading = false,
-                        categories = cats,
-                        brands = brs,
-                        error = null
-                    )
-                }
-            } catch (e: HttpException) {
-                val msg = e.response()?.errorBody()?.string()
-                _catalogs.update {
-                    it.copy(
-                        loading = false,
-                        error = "HTTP ${e.code()}${if (!msg.isNullOrBlank()) " – $msg" else ""}"
-                    )
-                }
-            } catch (e: Exception) {
-                _catalogs.update { it.copy(loading = false, error = e.message ?: "Network error") }
+                val cats = repo.getCategories()
+                val brs = repo.getBrands(categoryIdForBrands)
+                _catalogs.value = CatalogsState(categories = cats, brands = brs)
+            } catch (_: Exception) {
+                // ignora por ahora o loguea
             }
         }
     }
 
-    /**
-     * Crea un listing en el backend.
-     * Devuelve el resultado por callback (ok, errorMessage).
-     */
     fun createListing(
         title: String,
         description: String,
         categoryId: String,
-        brandId: String?,      // puede ser null si no elige marca
+        brandId: String?,
         priceCents: Int,
         currency: String,
-        condition: String,     // "new" | "used"
+        condition: String,
         quantity: Int,
-        latitude: Double? = null,
-        longitude: Double? = null,
-        priceSuggestionUsed: Boolean = false,
-        quickViewEnabled: Boolean = true,
-        onResult: (Boolean, String?) -> Unit
+        onResult: (ok: Boolean, msg: String?) -> Unit
     ) {
         viewModelScope.launch {
             try {
-                val loc = if (latitude != null && longitude != null) {
-                    LocationIn(latitude = latitude, longitude = longitude)
-                } else null
-
-                val body = CreateListingRequest(
+                repo.createListing(
                     title = title,
                     description = description,
                     categoryId = categoryId,
@@ -96,17 +62,14 @@ class ListingsViewModel(
                     currency = currency,
                     condition = condition,
                     quantity = quantity,
-                    location = loc,
-                    priceSuggestionUsed = priceSuggestionUsed,
-                    quickViewEnabled = quickViewEnabled
+                    // flags opcionales
+                    priceSuggestionUsed = false,
+                    quickViewEnabled = true
                 )
-                // No necesitamos el retorno aquí para la UI actual,
-                // pero el endpoint devuelve ListingDetailDto
-                listingApi.createListing(body)
                 onResult(true, null)
             } catch (e: HttpException) {
-                val msg = e.response()?.errorBody()?.string()
-                onResult(false, "HTTP ${e.code()}${if (!msg.isNullOrBlank()) " – $msg" else ""}")
+                val body = e.response()?.errorBody()?.string()
+                onResult(false, "HTTP ${e.code()}${if (!body.isNullOrBlank()) " – $body" else ""}")
             } catch (e: Exception) {
                 onResult(false, e.message ?: "Network error")
             }
@@ -114,15 +77,14 @@ class ListingsViewModel(
     }
 
     companion object {
-        /** Para usar: `viewModel(factory = ListingsViewModel.factory(app))` */
-        fun factory(app: Application): ViewModelProvider.Factory = viewModelFactory {
-            initializer { ListingsViewModel(app) }
-        }
-
-        // Alternativa si usas CreationExtras en algunos lugares
-        fun from(extras: CreationExtras): ListingsViewModel {
-            val application = checkNotNull(extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY])
-            return ListingsViewModel(application as Application)
+        fun factory(app: Application) = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                val api = ApiClient.listingApi()
+                val store = LocationStore(app)  // <- aquí inyectamos la ubicación guardada
+                val repository = ListingsRepository(api, store)
+                return ListingsViewModel(app, repository) as T
+            }
         }
     }
 }
