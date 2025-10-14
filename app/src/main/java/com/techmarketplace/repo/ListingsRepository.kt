@@ -25,7 +25,32 @@ class ListingsRepository(private val app: Application) {
         api.getBrands(categoryId)
     }
 
-    // -------- Listados / búsqueda --------
+    // -------- Mis publicaciones --------
+    suspend fun myListings(
+        page: Int = 1,
+        pageSize: Int = 20
+    ): Result<SearchListingsResponse> = safeCall {
+        api.searchListings(
+            mine = true,
+            page = page,
+            pageSize = pageSize
+        )
+    }
+
+    // -------- Publicaciones por vendedor --------
+    suspend fun listingsBySeller(
+        sellerId: String,
+        page: Int = 1,
+        pageSize: Int = 20
+    ): Result<SearchListingsResponse> = safeCall {
+        api.searchListings(
+            sellerId = sellerId,
+            page = page,
+            pageSize = pageSize
+        )
+    }
+
+    // -------- Listados / búsqueda (general) --------
     suspend fun searchListings(
         q: String? = null,
         categoryId: String? = null,
@@ -36,7 +61,10 @@ class ListingsRepository(private val app: Application) {
         nearLon: Double? = null,
         radiusKm: Double? = null,
         page: Int? = 1,
-        pageSize: Int? = 20
+        pageSize: Int? = 20,
+        // NEW: permite reutilizar esta misma función en perfil
+        mine: Boolean? = null,
+        sellerId: String? = null
     ): Result<SearchListingsResponse> = safeCall {
         api.searchListings(
             q = q,
@@ -48,7 +76,9 @@ class ListingsRepository(private val app: Application) {
             nearLon = nearLon,
             radiusKm = radiusKm,
             page = page,
-            pageSize = pageSize
+            pageSize = pageSize,
+            mine = mine,
+            sellerId = sellerId
         )
     }
 

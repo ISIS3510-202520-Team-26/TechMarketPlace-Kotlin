@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.getSystemService
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -38,15 +39,18 @@ import com.techmarketplace.feature.home.HomeRoute
 import com.techmarketplace.feature.onboarding.WelcomeScreen
 import com.techmarketplace.feature.order.OrderScreen
 import com.techmarketplace.feature.product.ProductDetailRoute
-import com.techmarketplace.feature.profile.ProfileScreen
+import com.techmarketplace.feature.profile.ProfileRoute
 import com.techmarketplace.net.ApiClient
+import com.techmarketplace.repo.AuthRepository
 import com.techmarketplace.ui.auth.LoginViewModel
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Init Retrofit/OkHttp + TokenStore
         ApiClient.init(applicationContext)
 
         setContent {
@@ -54,16 +58,17 @@ class MainActivity : ComponentActivity() {
                 Surface(Modifier.fillMaxSize()) {
                     val nav = rememberNavController()
                     val context = LocalContext.current
+                    val app = context.applicationContext as Application
+                    val scope = rememberCoroutineScope()
+                    val authRepo = remember { AuthRepository(app) }
 
                     // --- Ubicación: launcher a nivel raíz ---
-                    val fusedClient = remember {
-                        LocationServices.getFusedLocationProviderClient(context)
-                    }
+                    val fusedClient = remember { LocationServices.getFusedLocationProviderClient(context) }
                     var locationFlowRunning by remember { mutableStateOf(false) }
 
                     val permissionLauncher = rememberLauncherForActivityResult(
                         contract = ActivityResultContracts.RequestMultiplePermissions()
-                    ) { grants ->
+                    ) { grants: Map<String, Boolean> ->
                         val granted = grants.values.any { it }
                         if (granted) {
                             fetchAndSaveLocation(context, fusedClient) {
@@ -95,7 +100,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    val navigateBottom: (BottomItem) -> Unit = { dest ->
+                    val navigateBottom: (BottomItem) -> Unit = { dest: BottomItem ->
                         nav.navigate(dest.route) {
                             popUpTo(nav.graph.findStartDestination().id) { saveState = true }
                             launchSingleTop = true
@@ -109,53 +114,57 @@ class MainActivity : ComponentActivity() {
                             WelcomeScreen(onContinue = { nav.navigate("login") })
                         }
 
+                        // LOGIN
                         composable("login") {
-                            val app = context.applicationContext as Application
-                            val authVM: LoginViewModel =
-                                viewModel(factory = LoginViewModel.factory(app))
-
+                            val authVM: LoginViewModel = viewModel(factory = LoginViewModel.factory(app))
                             LoginScreen(
                                 onRegister = { nav.navigate("register") },
-                                onLogin = { email, pass ->
-                                    authVM.login(email, pass) { ok ->
+                                onLogin = { email: String, pass: String ->
+                                    authVM.login(email, pass) { ok: Boolean ->
                                         if (ok) {
-                                            Toast.makeText(context, "Welcome!", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "¡Bienvenido!", Toast.LENGTH_SHORT).show()
                                             nav.navigate("locationGate") {
                                                 popUpTo("login") { inclusive = true }
                                             }
                                         } else {
-                                            Toast.makeText(context, "Login failed", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(
+                                                context,
+                                                "Usuario o contraseña incorrectos",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
                                         }
                                     }
                                 },
-                                onGoogle = { /* disabled */ }
+                                onGoogle = { /* si habilitas Google, lanza aquí */ }
                             )
                         }
 
+                        // REGISTER
                         composable("register") {
-                            val app = context.applicationContext as Application
-                            val authVM: LoginViewModel =
-                                viewModel(factory = LoginViewModel.factory(app))
-
+                            val authVM: LoginViewModel = viewModel(factory = LoginViewModel.factory(app))
                             RegisterScreen(
                                 onLoginNow = { nav.popBackStack() },
-                                onRegisterClick = { name, email, pass, campus ->
-                                    authVM.register(name, email, pass, campus) { ok ->
+                                onRegisterClick = { name: String, email: String, pass: String, campus: String? ->
+                                    authVM.register(name, email, pass, campus) { ok: Boolean ->
                                         if (ok) {
-                                            Toast.makeText(context, "Account created!", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "¡Cuenta creada!", Toast.LENGTH_SHORT).show()
                                             nav.navigate("locationGate") {
                                                 popUpTo("login") { inclusive = true }
                                             }
                                         } else {
-                                            Toast.makeText(context, "Register failed", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(
+                                                context,
+                                                "No se pudo crear la cuenta",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
                                         }
                                     }
                                 },
-                                onGoogleClick = { /* disabled */ }
+                                onGoogleClick = { /* deshabilitado */ }
                             )
                         }
 
-                        // Gate que dispara el flujo de ubicación
+                        // Gate que dispara el flujo de ubicación tras login/registro
                         composable("locationGate") {
                             LocationGateScreen(onStart = { startLocationFlow() })
                         }
@@ -164,13 +173,13 @@ class MainActivity : ComponentActivity() {
                         composable(BottomItem.Home.route) {
                             HomeRoute(
                                 onAddProduct = { nav.navigate("addProduct") },
-                                onOpenDetail = { id -> nav.navigate("listing/$id") },
+                                onOpenDetail = { id: String -> nav.navigate("listing/$id") },
                                 onNavigateBottom = navigateBottom
                             )
                         }
 
                         // DETALLE
-                        composable("listing/{id}") { backStackEntry ->
+                        composable("listing/{id}") { backStackEntry: NavBackStackEntry ->
                             val id = backStackEntry.arguments?.getString("id") ?: return@composable
                             ProductDetailRoute(
                                 listingId = id,
@@ -194,18 +203,25 @@ class MainActivity : ComponentActivity() {
                             MyCartScreen(onNavigateBottom = { navigateBottom(BottomItem.Home) })
                         }
 
-                        // PROFILE
+                        // PROFILE — usa ProfileRoute
                         composable(BottomItem.Profile.route) {
-                            ProfileScreen(
-                                email = "",
-                                photoUrl = null,
+                            ProfileRoute(
+                                onNavigateBottom = navigateBottom,
+                                onOpenListing = { id: String -> nav.navigate("listing/$id") },
                                 onSignOut = {
-                                    nav.navigate("login") {
-                                        popUpTo(nav.graph.findStartDestination().id) { inclusive = true }
-                                        launchSingleTop = true
+                                    scope.launch {
+                                        // Si AuthRepository.logout() existe, lo ejecutamos por reflexión.
+                                        runCatching {
+                                            val m = authRepo::class.java.methods
+                                                .firstOrNull { it.name == "logout" && it.parameterTypes.isEmpty() }
+                                            m?.invoke(authRepo)
+                                        }
+                                        nav.navigate("login") {
+                                            popUpTo(nav.graph.findStartDestination().id) { inclusive = true }
+                                            launchSingleTop = true
+                                        }
                                     }
-                                },
-                                onNavigateBottom = { navigateBottom(BottomItem.Home) }
+                                }
                             )
                         }
                     }
@@ -263,10 +279,12 @@ private fun fetchAndSaveLocation(
                     saveLocation(ctx, loc.latitude, loc.longitude)
                     onDone()
                 } else {
-                    fusedClient.lastLocation.addOnSuccessListener { last ->
-                        if (last != null) saveLocation(ctx, last.latitude, last.longitude)
-                        onDone()
-                    }.addOnFailureListener { onDone() }
+                    fusedClient.lastLocation
+                        .addOnSuccessListener { last ->
+                            if (last != null) saveLocation(ctx, last.latitude, last.longitude)
+                            onDone()
+                        }
+                        .addOnFailureListener { onDone() }
                 }
             }
             .addOnFailureListener { onDone() }

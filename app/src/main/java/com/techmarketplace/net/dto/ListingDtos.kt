@@ -19,7 +19,13 @@ data class ListingSummaryDto(
     @SerialName("currency") val currency: String = "COP",
     @SerialName("category_id") val categoryId: String? = null,
     @SerialName("brand_id") val brandId: String? = null,
-    @SerialName("photos") val photos: List<ListingPhotoDto> = emptyList()
+    @SerialName("photos") val photos: List<ListingPhotoDto> = emptyList(),
+
+    // NEW (present in your /listings payloads and needed for Profile)
+    @SerialName("seller_id") val sellerId: String? = null,
+    @SerialName("is_active") val isActive: Boolean = true,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null
 )
 
 @Serializable

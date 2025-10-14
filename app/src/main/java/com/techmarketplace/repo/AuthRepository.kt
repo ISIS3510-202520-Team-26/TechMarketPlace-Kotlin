@@ -83,6 +83,10 @@ class AuthRepository(context: Context) {
         Unit
     }
 
+    suspend fun me() = runCatching {
+        withContext(Dispatchers.IO) { api.me() }
+    }
+
 
     private fun parse422(body: String?): AuthError {
         return try {

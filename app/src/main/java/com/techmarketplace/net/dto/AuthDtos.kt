@@ -1,5 +1,6 @@
 package com.techmarketplace.net.dto
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -31,7 +32,10 @@ data class TokenPair(
 data class UserMe(
     val id: String,
     val name: String,
-    val email: String
+    val email: String,
+    val campus: String? = null,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("last_login_at") val lastLoginAt: String? = null
 )
 
 @Serializable
