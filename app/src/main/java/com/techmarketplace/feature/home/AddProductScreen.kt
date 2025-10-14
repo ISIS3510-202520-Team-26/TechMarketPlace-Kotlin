@@ -46,7 +46,7 @@ fun AddProductRoute(
         brands = catalogsState.brands,
         onCancel = onCancel,
         onSave = { title, description, categoryId, brandId, priceText, condition, quantity ->
-            val priceCents = ((priceText.toDoubleOrNull() ?: 0.0) * 100).roundToInt()
+            val priceCents = ((priceText.toDoubleOrNull() ?: 0.0)).roundToInt()
 
             // ⬇️ Firma mínima: SIN latitude/longitude/flags
             vm.createListing(

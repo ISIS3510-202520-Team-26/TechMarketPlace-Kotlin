@@ -1,3 +1,4 @@
+// app/src/main/java/com/techmarketplace/net/ApiClient.kt
 package com.techmarketplace.net
 
 import android.annotation.SuppressLint
@@ -8,8 +9,7 @@ import com.techmarketplace.net.api.ListingApi
 import com.techmarketplace.net.api.OrdersApi
 import com.techmarketplace.net.api.PaymentsApi
 import com.techmarketplace.net.api.TelemetryApi
-import com.techmarketplace.net.api.ImagesApi
-import com.techmarketplace.net.api.BrandsApi
+import com.techmarketplace.net.api.PriceSuggestionsApi
 import com.techmarketplace.net.dto.RefreshRequest
 import com.techmarketplace.storage.TokenStore
 import kotlinx.coroutines.flow.firstOrNull
@@ -28,7 +28,7 @@ import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import java.util.concurrent.TimeUnit
 import retrofit2.create
 
-@SuppressLint("StaticFieldLeak") // TokenStore keeps application context internally
+@SuppressLint("StaticFieldLeak")
 object ApiClient {
 
     private lateinit var tokenStore: TokenStore
@@ -41,14 +41,12 @@ object ApiClient {
         encodeDefaults = true
     }
 
-    /** Factories de APIs */
     fun listingApi(): ListingApi = retrofit.create()
     fun authApi(): AuthApi = retrofit.create()
     fun telemetryApi(): TelemetryApi = retrofit.create()
     fun ordersApi(): OrdersApi = retrofit.create()
     fun paymentsApi(): PaymentsApi = retrofit.create()
-    fun imagesApi(): ImagesApi = retrofit.create()
-    fun brandsApi(): BrandsApi = retrofit.create()
+    fun priceSuggestionsApi(): PriceSuggestionsApi = retrofit.create()
 
     /** Call once from Application or Activity: ApiClient.init(applicationContext) */
     fun init(appContext: Context) {
@@ -60,7 +58,6 @@ object ApiClient {
             else HttpLoggingInterceptor.Level.NONE
         }
 
-        // Añade Authorization si tenemos token (excepto /auth/*)
         val authHeaderInterceptor = Interceptor { chain ->
             val original = chain.request()
             val path = original.url.encodedPath
@@ -78,10 +75,10 @@ object ApiClient {
             chain.proceed(builder.build())
         }
 
-        // Si 401, intenta refresh una vez (excepto /auth/*)
         val refreshAuthenticator = object : Authenticator {
             override fun authenticate(route: Route?, response: Response): Request? {
                 if (responseCount(response) >= 2) return null
+
                 val path = response.request.url.encodedPath
                 if (path.contains("/auth/")) return null
 
@@ -91,7 +88,6 @@ object ApiClient {
                     val refreshed = try {
                         val refresh = runBlocking { tokenStore.refreshToken.firstOrNull() } ?: return null
 
-                        // Retrofit mínimo sin auth para llamar /auth/refresh
                         val plainRetrofit = Retrofit.Builder()
                             .baseUrl(BuildConfig.API_BASE_URL)
                             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
@@ -144,7 +140,7 @@ object ApiClient {
             .build()
 
         retrofit = Retrofit.Builder()
-            .baseUrl(BuildConfig.API_BASE_URL) // Debe terminar con /v1/
+            .baseUrl(BuildConfig.API_BASE_URL)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .client(okHttp)
             .build()
