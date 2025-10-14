@@ -3,144 +3,126 @@ package com.techmarketplace.ui.listings
 import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.CreationExtras
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.lifecycle.viewModelScope
+import com.techmarketplace.net.ApiClient
 import com.techmarketplace.net.dto.CatalogItemDto
 import com.techmarketplace.net.dto.CreateListingRequest
-import com.techmarketplace.net.dto.ListingOutDto
-import com.techmarketplace.repo.ListingsRepository
+import com.techmarketplace.net.dto.LocationIn
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
-data class CatalogsUi(
-    val categories: List<CatalogItemDto> = emptyList(),
-    val brands: List<CatalogItemDto> = emptyList(),
-    val loading: Boolean = false,
-    val error: String? = null
-)
-
-data class SearchUi(
-    val items: List<ListingOutDto> = emptyList(),
+data class CatalogsUiState(
     val loading: Boolean = false,
     val error: String? = null,
-    val page: Int = 1,
-    val pageSize: Int = 20,
-    val total: Int = 0,
-    val hasNext: Boolean = false
+    val categories: List<CatalogItemDto> = emptyList(),
+    val brands: List<CatalogItemDto> = emptyList()
 )
 
-class ListingsViewModel(private val app: Application) : ViewModel() {
+class ListingsViewModel(
+    private val app: Application
+) : ViewModel() {
 
-    private val repo by lazy { ListingsRepository(app) }
+    private val listingApi = ApiClient.listingApi()
 
-    private val _catalogs = MutableStateFlow(CatalogsUi())
-    val catalogs: StateFlow<CatalogsUi> = _catalogs
+    private val _catalogs = MutableStateFlow(CatalogsUiState())
+    val catalogs: StateFlow<CatalogsUiState> = _catalogs
 
-    private val _search = MutableStateFlow(SearchUi())
-    val search: StateFlow<SearchUi> = _search
-
-    /** Carga categorías y marcas para los dropdowns */
-    fun refreshCatalogs(categoryIdForBrands: String? = null) = viewModelScope.launch {
-        _catalogs.value = _catalogs.value.copy(loading = true, error = null)
-
-        val catsRes = repo.getCategories()
-        val brandsRes = repo.getBrands(categoryIdForBrands)
-
-        val cats = catsRes.getOrNull().orEmpty()
-        val brs = brandsRes.getOrNull().orEmpty()
-        val err = catsRes.exceptionOrNull()?.message ?: brandsRes.exceptionOrNull()?.message
-
-        _catalogs.value = if (err == null) {
-            CatalogsUi(categories = cats, brands = brs, loading = false, error = null)
-        } else {
-            _catalogs.value.copy(loading = false, error = err)
+    /** Carga categorías y marcas del backend */
+    fun refreshCatalogs(categoryFilter: String? = null) {
+        viewModelScope.launch {
+            _catalogs.update { it.copy(loading = true, error = null) }
+            try {
+                val cats = listingApi.getCategories()
+                val brs = listingApi.getBrands(categoryId = categoryFilter)
+                _catalogs.update {
+                    it.copy(
+                        loading = false,
+                        categories = cats,
+                        brands = brs,
+                        error = null
+                    )
+                }
+            } catch (e: HttpException) {
+                val msg = e.response()?.errorBody()?.string()
+                _catalogs.update {
+                    it.copy(
+                        loading = false,
+                        error = "HTTP ${e.code()}${if (!msg.isNullOrBlank()) " – $msg" else ""}"
+                    )
+                }
+            } catch (e: Exception) {
+                _catalogs.update { it.copy(loading = false, error = e.message ?: "Network error") }
+            }
         }
     }
 
-    /** Busca listados con filtros opcionales (usa GET /v1/listings) */
-    fun searchListings(
-        q: String? = null,
-        categoryId: String? = null,
-        brandId: String? = null,
-        minPrice: Int? = null,
-        maxPrice: Int? = null,
-        nearLat: Double? = null,
-        nearLon: Double? = null,
-        radiusKm: Double? = null,
-        page: Int? = 1,
-        pageSize: Int? = 20
-    ) = viewModelScope.launch {
-        _search.value = _search.value.copy(loading = true, error = null)
-
-        val res = repo.searchListings(
-            q = q,
-            categoryId = categoryId,
-            brandId = brandId,
-            minPrice = minPrice,
-            maxPrice = maxPrice,
-            nearLat = nearLat,
-            nearLon = nearLon,
-            radiusKm = radiusKm,
-            page = page,
-            pageSize = pageSize
-        )
-
-        val body = res.getOrNull()
-        val err = res.exceptionOrNull()?.message
-
-        _search.value =
-            if (body != null) {
-                _search.value.copy(
-                    loading = false,
-                    items = body.items,
-                    error = null,
-                    page = body.page ?: (page ?: 1),
-                    pageSize = body.page_size ?: (pageSize ?: 20),
-                    total = body.total ?: body.items.size,
-                    hasNext = body.has_next ?: false
-                )
-            } else {
-                _search.value.copy(loading = false, error = err ?: "Search failed")
-            }
-    }
-
-    /** Crea un listing nuevo (POST /v1/listings) */
+    /**
+     * Crea un listing en el backend.
+     * Devuelve el resultado por callback (ok, errorMessage).
+     */
     fun createListing(
         title: String,
         description: String,
         categoryId: String,
-        brandId: String?,
+        brandId: String?,      // puede ser null si no elige marca
         priceCents: Int,
-        currency: String = "COP",
-        condition: String = "used",
-        quantity: Int = 1,
+        currency: String,
+        condition: String,     // "new" | "used"
+        quantity: Int,
+        latitude: Double? = null,
+        longitude: Double? = null,
+        priceSuggestionUsed: Boolean = false,
+        quickViewEnabled: Boolean = true,
         onResult: (Boolean, String?) -> Unit
-    ) = viewModelScope.launch {
-        val req = CreateListingRequest(
-            title = title,
-            description = description,
-            category_id = categoryId,
-            brand_id = brandId,
-            price_cents = priceCents,
-            currency = currency,
-            condition = condition,
-            quantity = quantity
-        )
-        val res = repo.createListing(req)
-        if (res.isSuccess) {
-            onResult(true, null)
-        } else {
-            onResult(false, res.exceptionOrNull()?.message ?: "Creation not successful")
+    ) {
+        viewModelScope.launch {
+            try {
+                val loc = if (latitude != null && longitude != null) {
+                    LocationIn(latitude = latitude, longitude = longitude)
+                } else null
+
+                val body = CreateListingRequest(
+                    title = title,
+                    description = description,
+                    categoryId = categoryId,
+                    brandId = brandId,
+                    priceCents = priceCents,
+                    currency = currency,
+                    condition = condition,
+                    quantity = quantity,
+                    location = loc,
+                    priceSuggestionUsed = priceSuggestionUsed,
+                    quickViewEnabled = quickViewEnabled
+                )
+                // No necesitamos el retorno aquí para la UI actual,
+                // pero el endpoint devuelve ListingDetailDto
+                listingApi.createListing(body)
+                onResult(true, null)
+            } catch (e: HttpException) {
+                val msg = e.response()?.errorBody()?.string()
+                onResult(false, "HTTP ${e.code()}${if (!msg.isNullOrBlank()) " – $msg" else ""}")
+            } catch (e: Exception) {
+                onResult(false, e.message ?: "Network error")
+            }
         }
     }
 
     companion object {
-        fun factory(app: Application): ViewModelProvider.Factory =
-            object : ViewModelProvider.Factory {
-                @Suppress("UNCHECKED_CAST")
-                override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return ListingsViewModel(app) as T
-                }
-            }
+        /** Para usar: `viewModel(factory = ListingsViewModel.factory(app))` */
+        fun factory(app: Application): ViewModelProvider.Factory = viewModelFactory {
+            initializer { ListingsViewModel(app) }
+        }
+
+        // Alternativa si usas CreationExtras en algunos lugares
+        fun from(extras: CreationExtras): ListingsViewModel {
+            val application = checkNotNull(extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY])
+            return ListingsViewModel(application as Application)
+        }
     }
 }

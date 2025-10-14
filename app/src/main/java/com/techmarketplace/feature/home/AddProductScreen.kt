@@ -1,3 +1,4 @@
+// app/src/main/java/com/techmarketplace/feature/home/AddProductScreen.kt
 package com.techmarketplace.feature.home
 
 import android.app.Application
@@ -21,6 +22,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.techmarketplace.net.dto.CatalogItemDto
 import com.techmarketplace.ui.listings.ListingsViewModel
 import kotlin.math.roundToInt
+
+// ✅ IMPORTS QUE FALTABAN
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 
 /** ROUTE: conecta VM + pasa catálogos/submit a la Screen */
 @Composable
@@ -150,7 +156,10 @@ fun AddProductScreen(
                 onValueChange = { title = it },
                 label = { Text("Title") },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(
+                    imeAction = ImeAction.Next
+                )
             )
 
             // Precio (0-9 + un solo '.')
@@ -166,7 +175,11 @@ fun AddProductScreen(
                 },
                 label = { Text("Price (e.g. 199.99)") },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Decimal,
+                    imeAction = ImeAction.Next
+                )
             )
 
             // Category
@@ -260,7 +273,11 @@ fun AddProductScreen(
                 onValueChange = { v -> quantity = v.filter { it.isDigit() }.ifBlank { "1" } },
                 label = { Text("Quantity") },
                 singleLine = true,
-                modifier = Modifier.width(140.dp)
+                modifier = Modifier.width(140.dp),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Next
+                )
             )
 
             // Description
@@ -269,7 +286,10 @@ fun AddProductScreen(
                 onValueChange = { desc = it },
                 label = { Text("Description") },
                 modifier = Modifier.fillMaxWidth(),
-                minLines = 3
+                minLines = 3,
+                keyboardOptions = KeyboardOptions(
+                    imeAction = ImeAction.Done
+                )
             )
         }
     }

@@ -27,8 +27,8 @@ import androidx.compose.ui.unit.sp
 import com.techmarketplace.core.ui.BottomBar
 import com.techmarketplace.core.ui.BottomItem
 import com.techmarketplace.net.ApiClient
-import retrofit2.HttpException
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 private data class UiCategory(val id: String, val name: String)
 private data class UiProduct(
@@ -78,7 +78,8 @@ fun HomeRoute(
             UiProduct(
                 id = it.id,
                 title = it.title,
-                price = it.price_cents / 100.0
+                // ⬇️ CAMBIO: ahora es camelCase en DTOs
+                price = it.priceCents / 100.0
             )
         }
     }
@@ -178,7 +179,6 @@ private fun HomeScreenContent(
     onOpenDetail: (String) -> Unit,
     bottomSpace: Dp
 ) {
-    // 👇 IMPORTANTE: el padding inferior “recorta” el panel blanco antes del footer
     Surface(
         color = Color.White,
         shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
@@ -278,7 +278,6 @@ private fun HomeScreenContent(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        // ya no hace falta un padding enorme aquí
                         contentPadding = PaddingValues(bottom = 16.dp)
                     ) {
                         items(products, key = { it.id }) { p ->
@@ -297,7 +296,7 @@ private fun HomeScreenContent(
 }
 
 @Composable
-private fun ErrorBlock(message: String, onRetry: () -> Unit) { /* igual que antes */
+private fun ErrorBlock(message: String, onRetry: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -314,7 +313,7 @@ private fun ErrorBlock(message: String, onRetry: () -> Unit) { /* igual que ante
 }
 
 @Composable
-private fun RoundIcon(icon: ImageVector, onClick: () -> Unit) { /* igual que antes */
+private fun RoundIcon(icon: ImageVector, onClick: () -> Unit) {
     Surface(color = Color(0xFFF5F5F5), shape = CircleShape, onClick = onClick) {
         Icon(icon, contentDescription = null, tint = GreenDark, modifier = Modifier.padding(12.dp))
     }
@@ -326,7 +325,7 @@ private fun ProductCardNew(
     seller: String,
     price: Double,
     onOpen: () -> Unit
-) { /* igual que antes */
+) {
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = Color.White,
