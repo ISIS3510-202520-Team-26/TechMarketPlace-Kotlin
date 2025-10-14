@@ -2,12 +2,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Necesario para Firebase Auth / llamadas de red -->
+    <!-- Red -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Needed to query connectivity state -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Ubicación (precisa y aproximada) -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!-- (Opcional) Marca que el GPS existe pero no obliga a tenerlo para instalar -->
+    <uses-feature
+        android:name="android.hardware.location.gps"
+        android:required="false" />
+
     <application
+        android:name=".TMApp"
         android:allowBackup="true"
         android:usesCleartextTraffic="true"
         android:networkSecurityConfig="@xml/network_security_config"
@@ -20,7 +29,7 @@
         android:theme="@style/Theme.TechMarketPlace"
         tools:targetApi="31">
 
-    <activity
+        <activity
             android:name=".MainActivity"
             android:exported="true">
             <intent-filter>
@@ -28,7 +37,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
 
         <!-- El plugin google-services fusiona automáticamente los <meta-data> desde google-services.json -->
     </application>

@@ -1,98 +1,87 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.techmarketplace.feature.product
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.rememberAsyncImagePainter
-
-// Icons (paquete correcto)
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowBack
-
+import androidx.compose.ui.unit.sp
 import com.techmarketplace.net.ApiClient
-import com.techmarketplace.storage.MyOrdersStore
-import com.techmarketplace.storage.MyPaymentsStore
-import com.techmarketplace.storage.MyTelemetryStore
+import com.techmarketplace.net.dto.ListingDetailDto
+import com.techmarketplace.net.dto.TelemetryBatchIn
+import com.techmarketplace.net.dto.TelemetryEventIn
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 
 @Composable
-fun ProductDetailScreen(
+fun ProductDetailRoute(
     listingId: String,
-    onBack: () -> Unit,
-    onPurchaseCompleted: () -> Unit
+    onBack: () -> Unit
 ) {
-    val listingApi = remember { ApiClient.listingApi() }
-    val telemetryApi = remember { ApiClient.telemetryApi() }
-    val ordersApi = remember { ApiClient.ordersApi() }
-    val paymentsApi = remember { ApiClient.paymentsApi() }
+    val api = remember { ApiClient.listingApi() }
+    val telemetry = remember { ApiClient.telemetryApi() }
     val scope = rememberCoroutineScope()
 
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    var detail by remember { mutableStateOf<ListingDetailDto?>(null) }
 
-    // Estados de UI
-    var uiTitle by remember { mutableStateOf("") }
-    var uiDesc by remember { mutableStateOf("") }
-    var uiPriceCents by remember { mutableStateOf(0) }
-    var uiCurrency by remember { mutableStateOf("COP") }
-    var uiPreviewUrl by remember { mutableStateOf<String?>(null) }
-    var uiLat by remember { mutableStateOf<Double?>(null) }
-    var uiLon by remember { mutableStateOf<Double?>(null) }
-    var suggestedPriceCents by remember { mutableStateOf<Int?>(null) }
-    var suggestedAlgorithm by remember { mutableStateOf<String?>(null) }
+    // nombres “bonitos”
+    var categoryName by remember { mutableStateOf<String?>(null) }
+    var brandName by remember { mutableStateOf<String?>(null) }
+
+    val snack = remember { SnackbarHostState() }
 
     LaunchedEffect(listingId) {
         loading = true; error = null
         try {
-            val detailAny: Any = listingApi.getListingDetail(listingId) as Any
+            val d = api.getListingDetail(listingId)
+            detail = d
 
-            // Lee por reflexión para tolerar snake_case o camelCase en DTOs
-            uiTitle = readField(detailAny, "title") ?: ""
-            uiDesc = readField(detailAny, "description") ?: ""
-            uiPriceCents = readField<Int>(detailAny, "price_cents") ?: readField(detailAny, "priceCents") ?: 0
-            uiCurrency = readField(detailAny, "currency") ?: "COP"
-            uiLat = readField(detailAny, "latitude")
-            uiLon = readField(detailAny, "longitude")
-
-            val photos: List<Any>? = readField(detailAny, "photos")
-            val firstPhoto = photos?.firstOrNull()
-            uiPreviewUrl = firstPhoto?.let { p ->
-                readField<String>(p, "image_url") ?: readField(p, "imageUrl")
+            // --- lookups: category & brand → name ---
+            runCatching {
+                val cats = api.getCategories()
+                categoryName = cats.firstOrNull { it.id == d.categoryId }?.name ?: d.categoryId
+            }
+            runCatching {
+                // intenta primero filtrando por category para reducir tráfico
+                val brands = api.getBrands(categoryId = d.categoryId)
+                brandName = brands.firstOrNull { it.id == d.brandId }?.name
+                    ?: api.getBrands(null).firstOrNull { it.id == d.brandId }?.name
+                            ?: d.brandId
             }
 
-            // si luego agregas price-suggestions, setéalas aquí
-            suggestedPriceCents = null
-            suggestedAlgorithm = null
-
-            // ✅ ahora es suspend y puede llamarse directo aquí
-            sendTelemetry(
-                telemetryApi,
-                listingId,
-                "product.viewed",
-                mapOf("title" to uiTitle, "price_cents" to uiPriceCents)
-            )
+            // Telemetry (no bloquea UI si falla)
+            runCatching {
+                telemetry.ingest(
+                    TelemetryBatchIn(
+                        events = listOf(
+                            TelemetryEventIn(
+                                eventType = "product.viewed",
+                                sessionId = "srv",
+                                userId = null,
+                                listingId = listingId,
+                                step = null,
+                                properties = emptyMap()
+                            )
+                        )
+                    )
+                )
+            }
         } catch (e: HttpException) {
-            error = "HTTP ${e.code()}"
+            val body = e.response()?.errorBody()?.string()
+            error = "HTTP ${e.code()}${if (!body.isNullOrBlank()) " – $body" else ""}"
         } catch (e: Exception) {
             error = e.message ?: "Network error"
         } finally {
@@ -100,209 +89,155 @@ fun ProductDetailScreen(
         }
     }
 
-    Surface(Modifier.fillMaxSize()) {
-        when {
-            loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
+    ProductDetailScreen(
+        loading = loading,
+        error = error,
+        detail = detail,
+        categoryName = categoryName,
+        brandName = brandName,
+        onBack = onBack,
+        onBuy = {
+            scope.launch { snack.showSnackbar("Comprar: próximamente") }
+        },
+        snack = snack
+    )
+}
 
-            error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("No se pudo cargar el detalle")
-                    Text(error!!)
-                    Spacer(Modifier.height(12.dp))
-                    Button(onClick = onBack) { Text("Volver") }
-                }
-            }
+@Composable
+private fun ProductDetailScreen(
+    loading: Boolean,
+    error: String?,
+    detail: ListingDetailDto?,
+    categoryName: String?,
+    brandName: String?,
+    onBack: () -> Unit,
+    onBuy: () -> Unit,
+    snack: SnackbarHostState
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = detail?.title ?: "Detalle",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(imageVector = Icons.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.White,
+                    titleContentColor = Color(0xFF0F4D3A)
+                )
+            )
+        },
+        snackbarHost = { SnackbarHost(snack) }
+    ) { inner ->
+        when {
+            loading -> Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(inner),
+                contentAlignment = Alignment.Center
+            ) { CircularProgressIndicator() }
+
+            error != null -> Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(inner),
+                contentAlignment = Alignment.Center
+            ) { Text(error, color = Color(0xFFB00020)) }
+
+            detail == null -> Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(inner),
+                contentAlignment = Alignment.Center
+            ) { Text("No data") }
 
             else -> {
+                val d = detail
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        .padding(inner)
                         .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowBack, null) }
-                        Text(
-                            uiTitle,
-                            style = MaterialTheme.typography.titleLarge
-                        )
-                    }
-
-                    val painter = rememberAsyncImagePainter(model = uiPreviewUrl)
-                    Image(
-                        painter = painter,
-                        contentDescription = null,
+                    // Foto (placeholder). Sustituye por AsyncImage si usas Coil con d.photos[0].image_url
+                    Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(220.dp)
-                            .padding(horizontal = 16.dp),
-                        contentScale = ContentScale.Crop
-                    )
+                            .height(220.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color(0xFF1F1F1F)
+                    ) {}
+
+                    Text(d.title ?: "—", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF0F4D3A))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = priceLabel(d.priceCents ?: 0, d.currency),
+                            style = MaterialTheme.typography.titleLarge,
+                            color = Color(0xFF0F4D3A),
+                            fontWeight = FontWeight.Bold
+                        )
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Suggested", color = Color(0xFF6B7783), fontSize = 12.sp)
+                            Text("—", color = Color(0xFF6B7783), fontSize = 14.sp)
+                        }
+                    }
+
+                    Divider()
+
+                    AttrRow("Condition", d.condition)
+                    AttrRow("Quantity", d.quantity?.toString())
+                    AttrRow("Category", categoryName ?: d.categoryId ?: "—")
+                    AttrRow("Brand", brandName ?: d.brandId ?: "—")
+                    if (d.latitude != null && d.longitude != null) {
+                        AttrRow("Location", "${d.latitude}, ${d.longitude}")
+                    }
+
+                    if (!d.description.isNullOrBlank()) {
+                        Text("Description", fontWeight = FontWeight.SemiBold, color = Color(0xFF0F4D3A))
+                        Text(d.description!!, color = Color(0xFF37474F))
+                    }
 
                     Spacer(Modifier.height(12.dp))
-
-                    Text(
-                        "Precio: ${uiPriceCents / 100.0} $uiCurrency",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                    suggestedPriceCents?.let { cents ->
-                        val alg = suggestedAlgorithm ?: "suggested"
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "Sugerido: ${cents / 100.0} $uiCurrency ($alg)",
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Descripción",
-                        style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                    Text(
-                        uiDesc.ifBlank { "—" },
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Ubicación",
-                        style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                    Text(
-                        if (uiLat != null && uiLon != null) "lat: $uiLat, lon: $uiLon" else "No disponible",
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-
-                    Spacer(Modifier.height(16.dp))
                     Button(
-                        onClick = {
-                            scope.launch {
-                                try {
-                                    val order = ordersApi.create(
-                                        com.techmarketplace.net.dto.OrderCreateIn(
-                                            listingId = listingId,
-                                            quantity = 1,
-                                            totalCents = uiPriceCents,
-                                            currency = uiCurrency
-                                        )
-                                    )
-                                    MyOrdersStore.add(
-                                        com.techmarketplace.storage.LocalOrder(
-                                            id = order.id,
-                                            listingId = order.listingId,
-                                            totalCents = order.totalCents,
-                                            currency = order.currency,
-                                            status = order.status
-                                        )
-                                    )
-
-                                    // Captura de pago (best-effort)
-                                    try {
-                                        paymentsApi.capture(order.id)
-                                        MyPaymentsStore.add(
-                                            com.techmarketplace.storage.LocalPayment(
-                                                orderId = order.id,
-                                                action = "capture",
-                                                at = System.currentTimeMillis()
-                                            )
-                                        )
-                                    } catch (_: Exception) { /* ignore */ }
-
-                                    // ✅ estamos dentro de launch -> podemos llamar suspend
-                                    sendTelemetry(
-                                        telemetryApi,
-                                        listingId,
-                                        "checkout.step",
-                                        mapOf("step" to "payment", "order_id" to order.id)
-                                    )
-                                    onPurchaseCompleted()
-                                } catch (_: Exception) {
-                                    sendTelemetry(
-                                        telemetryApi,
-                                        listingId,
-                                        "checkout.step",
-                                        mapOf("step" to "payment_failed")
-                                    )
-                                }
-                            }
-                        },
+                        onClick = onBuy,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                    ) {
-                        Text("Comprar")
-                    }
-
-                    Spacer(Modifier.height(24.dp))
+                            .height(52.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("Comprar", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+                    Spacer(Modifier.height(8.dp))
                 }
             }
         }
     }
 }
 
-/* ---------- Utilidades ---------- */
-
-@Suppress("UNCHECKED_CAST")
-private fun <T> readField(receiver: Any, vararg names: String): T? {
-    val cls = receiver.javaClass
-    for (n in names) {
-        try {
-            val f = cls.getDeclaredField(n)
-            f.isAccessible = true
-            return f.get(receiver) as T
-        } catch (_: NoSuchFieldException) {
-            // intenta con el siguiente nombre
-        } catch (_: Exception) {
-            return null
-        }
+@Composable
+private fun AttrRow(label: String, value: String?) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, color = Color(0xFF6B7783))
+        Text(value ?: "—", color = Color(0xFF37474F))
     }
-    return null
 }
 
-/** Ahora es suspend: se puede llamar desde LaunchedEffect o dentro de scope.launch */
-private suspend fun sendTelemetry(
-    telemetryApi: com.techmarketplace.net.api.TelemetryApi,
-    listingId: String,
-    type: String,
-    props: Map<String, Any?>
-) {
-    try {
-        telemetryApi.ingest(
-            com.techmarketplace.net.dto.TelemetryBatchIn(
-                events = listOf(
-                    com.techmarketplace.net.dto.TelemetryEventIn(
-                        eventType = type,
-                        sessionId = "app",
-                        listingId = listingId,
-                        properties = props.mapValues { it.value?.toString() ?: "null" }
-                    )
-                )
-            )
-        )
-        MyTelemetryStore.add(
-            com.techmarketplace.storage.LocalTelemetry(
-                type = type,
-                props = props.toString(),
-                at = System.currentTimeMillis()
-            )
-        )
-    } catch (_: Exception) {
-        MyTelemetryStore.add(
-            com.techmarketplace.storage.LocalTelemetry(
-                type = "$type (send-failed)",
-                props = props.toString(),
-                at = System.currentTimeMillis()
-            )
-        )
-    }
+private fun priceLabel(priceCents: Int, currency: String?): String {
+    return if (currency.isNullOrBlank()) priceCents.toString()
+    else "$currency ${priceCents.toDouble()}"
 }

@@ -79,7 +79,7 @@ fun HomeRoute(
                 id = it.id,
                 title = it.title,
                 // ⬇️ CAMBIO: ahora es camelCase en DTOs
-                price = it.priceCents / 100.0
+                price = it.priceCents.toDouble()
             )
         }
     }
@@ -349,7 +349,7 @@ private fun ProductCardNew(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("$${"%.2f".format(price)}", color = GreenDark, fontWeight = FontWeight.SemiBold)
+                Text("$${price}", color = GreenDark, fontWeight = FontWeight.SemiBold)
                 Surface(shape = CircleShape, color = Color(0xFFF5F5F5), onClick = onOpen) {
                     Text("+", color = GreenDark, modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp))
                 }
