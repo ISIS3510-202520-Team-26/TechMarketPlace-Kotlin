@@ -4,15 +4,11 @@ import com.techmarketplace.net.dto.CatalogItemDto
 import com.techmarketplace.net.dto.CreateListingRequest
 import com.techmarketplace.net.dto.ListingDetailDto
 import com.techmarketplace.net.dto.SearchListingsResponse
-import retrofit2.http.Body
-import retrofit2.http.GET
-import retrofit2.http.POST
-import retrofit2.http.Path
-import retrofit2.http.Query
+import retrofit2.http.*
 
 interface ListingApi {
 
-    // --- Catálogos ---
+    // ---- Catálogos ----
     @GET("categories")
     suspend fun getCategories(): List<CatalogItemDto>
 
@@ -21,7 +17,7 @@ interface ListingApi {
         @Query("category_id") categoryId: String? = null
     ): List<CatalogItemDto>
 
-    // --- Listados / búsqueda ---
+    // ---- Listado / búsqueda ----
     @GET("listings")
     suspend fun searchListings(
         @Query("q") q: String? = null,
@@ -36,13 +32,13 @@ interface ListingApi {
         @Query("page_size") pageSize: Int? = 20
     ): SearchListingsResponse
 
-    // --- Detalle ---
+    // ---- Detalle ----
     @GET("listings/{id}")
     suspend fun getListingDetail(
         @Path("id") id: String
     ): ListingDetailDto
 
-    // --- Crear listing ---
+    // ---- Crear ----
     @POST("listings")
     suspend fun createListing(
         @Body body: CreateListingRequest
