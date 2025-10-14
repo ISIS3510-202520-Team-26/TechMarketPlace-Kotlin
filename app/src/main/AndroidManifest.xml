@@ -4,6 +4,8 @@
 
     <!-- Necesario para Firebase Auth / llamadas de red -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Needed to query connectivity state -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:allowBackup="true"
@@ -26,6 +28,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
 
         <!-- El plugin google-services fusiona automáticamente los <meta-data> desde google-services.json -->
     </application>

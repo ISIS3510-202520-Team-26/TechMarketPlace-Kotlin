@@ -1,102 +1,99 @@
 package com.techmarketplace.repo
 
 import android.content.Context
-import java.io.IOException
-import retrofit2.HttpException
+import com.techmarketplace.core.errors.AuthError
+import com.techmarketplace.core.errors.AuthResult
 import com.techmarketplace.net.ApiClient
 import com.techmarketplace.net.api.AuthApi
+import com.techmarketplace.net.dto.FastApiValidationError
 import com.techmarketplace.net.dto.GoogleLoginRequest
 import com.techmarketplace.net.dto.LoginRequest
 import com.techmarketplace.net.dto.RegisterRequest
-import com.techmarketplace.net.dto.UserMe
 import com.techmarketplace.storage.TokenStore
+import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonPrimitive
+import retrofit2.HttpException
 
-/**
- * Handles login/register calls and persists the returned tokens.
- *
- * NOTE: ApiClient is expected to attach Authorization headers automatically
- * using TokenStore (via its interceptor/authenticator).
- */
 class AuthRepository(context: Context) {
-
     private val api: AuthApi by lazy { ApiClient.authApi() }
     private val store: TokenStore = TokenStore(context)
+    private val json = Json { ignoreUnknownKeys = true }
 
-    /**
-     * POST /v1/auth/register
-     * Saves tokens on success.
-     */
-    suspend fun register(
+    // --- New: detailed results for better UI wiring ---
+    suspend fun loginDetailed(email: String, password: String): AuthResult =
+        withContext(Dispatchers.IO) {
+            try {
+                val tokens = api.login(LoginRequest(email, password))
+                store.saveTokens(tokens.access_token, tokens.refresh_token)
+                AuthResult.Success
+            } catch (t: Throwable) {
+                AuthResult.Failure(mapAuthError(t))
+            }
+        }
+
+    suspend fun registerDetailed(
         name: String,
         email: String,
         password: String,
         campus: String?
-    ): Result<Unit> = safeCall {
-        // 1) Create account (returns user)
-        api.register(RegisterRequest(name, email, password, campus))
-
-        // 2) Immediately login to obtain tokens
-        val pair = api.login(LoginRequest(email, password))
-
-        // 3) Persist tokens
-        store.saveTokens(pair.access_token, pair.refresh_token)
-
-        // 4) (Optional) fetch me to warm cache or verify
-        // val me = api.me()
-
-        Unit
-    }
-
-    /**
-     * POST /v1/auth/login
-     * Saves tokens on success.
-     */
-    suspend fun login(
-        email: String,
-        password: String
-    ): Result<Unit> = runCatching {
-        val tokens = withContext(Dispatchers.IO) {
-            api.login(LoginRequest(email = email, password = password))
+    ): AuthResult = withContext(Dispatchers.IO) {
+        try {
+            // Create user
+            api.register(RegisterRequest(name, email, password, campus))
+            // Then login to get tokens
+            val tokens = api.login(LoginRequest(email, password))
+            store.saveTokens(tokens.access_token, tokens.refresh_token)
+            AuthResult.Success
+        } catch (t: Throwable) {
+            AuthResult.Failure(mapAuthError(t))
         }
-        store.saveTokens(tokens.access_token, tokens.refresh_token)
-        Unit
     }
 
-    // in AuthRepository.kt
+    // Keep your old ones if other code still calls them
+    // fun login(...): Result<Unit> { ... }
+    // fun register(...): Result<Unit> { ... }
+
+    // ---- helpers ----
+    private fun mapAuthError(t: Throwable): AuthError = when (t) {
+        is IOException -> AuthError.Offline
+        is HttpException -> mapHttpException(t)
+        else -> AuthError.Unknown(t.message)
+    }
+
+    private fun mapHttpException(e: HttpException): AuthError {
+        val code = e.code()
+        val body = e.response()?.errorBody()?.string() // read once
+        return when {
+            code == 401 -> AuthError.InvalidCredentials
+            code in listOf(400, 409) && body?.contains("email", true) == true &&
+                    body.contains("already registered", true) ->
+                AuthError.DuplicateEmail
+            code == 422 -> parse422(body)
+            code in 500..599 -> AuthError.Server
+            else -> AuthError.Unknown(body ?: e.message())
+        }
+    }
     suspend fun loginWithGoogle(idToken: String): Result<Unit> = runCatching {
+        // Sends the Google ID token to your backend; backend returns access/refresh
         val pair = api.loginWithGoogle(GoogleLoginRequest(id_token = idToken))
         store.saveTokens(pair.access_token, pair.refresh_token)
         Unit
     }
 
 
-    /**
-     * GET /v1/auth/me — optional helper to verify session / fetch profile.
-     */
-    suspend fun me(): Result<UserMe> = runCatching {
-        withContext(Dispatchers.IO) { api.me() }
-    }
-
-    /**
-     * Clear local tokens (sign out).
-     */
-    suspend fun logout() {
-        store.clear()
-    }
-
-    private suspend fun <T> safeCall(block: suspend () -> T): Result<T> =
-        withContext(Dispatchers.IO) {
-            try {
-                Result.success(block())
-            } catch (e: HttpException) {
-                Result.failure(e)
-            } catch (e: IOException) {
-                Result.failure(e)
-            } catch (e: Exception) {
-                Result.failure(e)
+    private fun parse422(body: String?): AuthError {
+        return try {
+            val parsed = json.decodeFromString(FastApiValidationError.serializer(), body ?: "{}")
+            val items = parsed.detail.map { d ->
+                val field = d.loc.lastOrNull()?.jsonPrimitive?.content ?: "body"
+                AuthError.FieldErrors.FieldError(field, d.type, d.msg)
             }
-
+            AuthError.FieldErrors(items)
+        } catch (_: Exception) {
+            AuthError.Unknown(body)
         }
+    }
 }
