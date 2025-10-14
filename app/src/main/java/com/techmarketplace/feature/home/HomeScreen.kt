@@ -138,6 +138,8 @@ fun HomeScreen(
                     Spacer(Modifier.height(12.dp))
 
                     // Chips de categorías
+
+
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         items(categories.size) { i ->
                             val cat = categories[i]

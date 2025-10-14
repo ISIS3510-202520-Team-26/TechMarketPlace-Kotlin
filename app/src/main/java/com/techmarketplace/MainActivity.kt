@@ -1,33 +1,19 @@
 package com.techmarketplace
 
 import android.app.Application
-import android.content.Context
-import android.content.Intent
-import android.location.LocationManager
 import android.os.Bundle
-import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import androidx.core.content.getSystemService
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
 import com.techmarketplace.core.designsystem.TMTheme
 import com.techmarketplace.core.ui.BottomItem
 import com.techmarketplace.feature.auth.LoginScreen
@@ -35,7 +21,6 @@ import com.techmarketplace.feature.auth.RegisterScreen
 import com.techmarketplace.feature.cart.MyCartScreen
 import com.techmarketplace.feature.home.AddProductRoute
 import com.techmarketplace.feature.home.HomeRoute
-import com.techmarketplace.feature.onboarding.WelcomeScreen
 import com.techmarketplace.feature.order.OrderScreen
 import com.techmarketplace.feature.product.ProductDetailRoute
 import com.techmarketplace.feature.profile.ProfileScreen
@@ -55,46 +40,6 @@ class MainActivity : ComponentActivity() {
                     val nav = rememberNavController()
                     val context = LocalContext.current
 
-                    // --- Ubicación: launcher a nivel raíz ---
-                    val fusedClient = remember {
-                        LocationServices.getFusedLocationProviderClient(context)
-                    }
-                    var locationFlowRunning by remember { mutableStateOf(false) }
-
-                    val permissionLauncher = rememberLauncherForActivityResult(
-                        contract = ActivityResultContracts.RequestMultiplePermissions()
-                    ) { grants ->
-                        val granted = grants.values.any { it }
-                        if (granted) {
-                            fetchAndSaveLocation(context, fusedClient) {
-                                locationFlowRunning = false
-                                nav.navigate(BottomItem.Home.route) {
-                                    popUpTo(nav.graph.findStartDestination().id) { inclusive = true }
-                                    launchSingleTop = true
-                                }
-                            }
-                        } else {
-                            Toast.makeText(context, "Ubicación no concedida", Toast.LENGTH_SHORT).show()
-                            locationFlowRunning = false
-                            nav.navigate(BottomItem.Home.route) {
-                                popUpTo(nav.graph.findStartDestination().id) { inclusive = true }
-                                launchSingleTop = true
-                            }
-                        }
-                    }
-
-                    val startLocationFlow: () -> Unit = {
-                        if (!locationFlowRunning) {
-                            locationFlowRunning = true
-                            permissionLauncher.launch(
-                                arrayOf(
-                                    android.Manifest.permission.ACCESS_FINE_LOCATION,
-                                    android.Manifest.permission.ACCESS_COARSE_LOCATION
-                                )
-                            )
-                        }
-                    }
-
                     val navigateBottom: (BottomItem) -> Unit = { dest ->
                         nav.navigate(dest.route) {
                             popUpTo(nav.graph.findStartDestination().id) { saveState = true }
@@ -104,10 +49,6 @@ class MainActivity : ComponentActivity() {
                     }
 
                     NavHost(navController = nav, startDestination = "login") {
-
-                        composable("welcome") {
-                            WelcomeScreen(onContinue = { nav.navigate("login") })
-                        }
 
                         composable("login") {
                             val app = context.applicationContext as Application
@@ -120,7 +61,8 @@ class MainActivity : ComponentActivity() {
                                     authVM.login(email, pass) { ok ->
                                         if (ok) {
                                             Toast.makeText(context, "Welcome!", Toast.LENGTH_SHORT).show()
-                                            nav.navigate("locationGate") {
+                                            // 👉 Ir DIRECTO al Home (sin LocationGate)
+                                            nav.navigate(BottomItem.Home.route) {
                                                 popUpTo("login") { inclusive = true }
                                             }
                                         } else {
@@ -128,7 +70,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 },
-                                onGoogle = { /* disabled */ }
+                                onGoogle = { /* opcional */ }
                             )
                         }
 
@@ -143,7 +85,8 @@ class MainActivity : ComponentActivity() {
                                     authVM.register(name, email, pass, campus) { ok ->
                                         if (ok) {
                                             Toast.makeText(context, "Account created!", Toast.LENGTH_SHORT).show()
-                                            nav.navigate("locationGate") {
+                                            // 👉 También directo al Home
+                                            nav.navigate(BottomItem.Home.route) {
                                                 popUpTo("login") { inclusive = true }
                                             }
                                         } else {
@@ -151,13 +94,8 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 },
-                                onGoogleClick = { /* disabled */ }
+                                onGoogleClick = { /* opcional */ }
                             )
-                        }
-
-                        // Gate que dispara el flujo de ubicación
-                        composable("locationGate") {
-                            LocationGateScreen(onStart = { startLocationFlow() })
                         }
 
                         // HOME
@@ -188,10 +126,14 @@ class MainActivity : ComponentActivity() {
 
                         // ORDER & CART
                         composable(BottomItem.Order.route) {
-                            OrderScreen(onNavigateBottom = { navigateBottom(BottomItem.Home) })
+                            OrderScreen(
+                                onNavigateBottom = { navigateBottom(BottomItem.Home) }
+                            )
                         }
                         composable(BottomItem.Cart.route) {
-                            MyCartScreen(onNavigateBottom = { navigateBottom(BottomItem.Home) })
+                            MyCartScreen(
+                                onNavigateBottom = { navigateBottom(BottomItem.Home) }
+                            )
                         }
 
                         // PROFILE
@@ -213,72 +155,4 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
-    private fun goHome() {
-        startActivity(
-            Intent(this, MainActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
-        )
-        finish()
-    }
-}
-
-@Composable
-private fun LocationGateScreen(onStart: () -> Unit) {
-    LaunchedEffect(Unit) { onStart() }
-    Surface(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator()
-                Spacer(Modifier.height(12.dp))
-                Text("Configurando tu ubicación…")
-            }
-        }
-    }
-}
-
-/* --- Helpers de ubicación --- */
-private fun fetchAndSaveLocation(
-    ctx: Context,
-    fusedClient: com.google.android.gms.location.FusedLocationProviderClient,
-    onDone: () -> Unit
-) {
-    val lm: LocationManager? = ctx.getSystemService()
-    val gpsOn = lm?.isProviderEnabled(LocationManager.GPS_PROVIDER) == true ||
-            lm?.isProviderEnabled(LocationManager.NETWORK_PROVIDER) == true
-
-    if (!gpsOn) {
-        Toast.makeText(ctx, "Activa el GPS para mejor precisión", Toast.LENGTH_SHORT).show()
-        ctx.startActivity(
-            Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        )
-    }
-
-    try {
-        fusedClient
-            .getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, null)
-            .addOnSuccessListener { loc ->
-                if (loc != null) {
-                    saveLocation(ctx, loc.latitude, loc.longitude)
-                    onDone()
-                } else {
-                    fusedClient.lastLocation.addOnSuccessListener { last ->
-                        if (last != null) saveLocation(ctx, last.latitude, last.longitude)
-                        onDone()
-                    }.addOnFailureListener { onDone() }
-                }
-            }
-            .addOnFailureListener { onDone() }
-    } catch (_: SecurityException) {
-        onDone()
-    }
-}
-
-private fun saveLocation(ctx: Context, lat: Double, lon: Double) {
-    val prefs = ctx.getSharedPreferences("prefs", Context.MODE_PRIVATE)
-    prefs.edit()
-        .putString("last_lat", lat.toString())
-        .putString("last_lon", lon.toString())
-        .apply()
 }
