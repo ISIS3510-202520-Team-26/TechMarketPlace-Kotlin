@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+<manifest
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Red -->
+    <!-- Red / backend -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
@@ -10,9 +11,15 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
-    <!-- (Opcional) Marca que el GPS existe pero no obliga a tenerlo para instalar -->
+    <!-- Cámara (para usar ACTION_IMAGE_CAPTURE con FileProvider) -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+
+    <!-- (Opcional) el dispositivo puede tener GPS, pero no lo exigimos para instalar -->
     <uses-feature
         android:name="android.hardware.location.gps"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.camera"
         android:required="false" />
 
     <application
@@ -38,6 +45,17 @@
             </intent-filter>
         </activity>
 
-        <!-- El plugin google-services fusiona automáticamente los <meta-data> desde google-services.json -->
+        <!-- FileProvider para capturar imágenes con la cámara -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- Si usas google-services, sus <meta-data> se fusionan automáticamente -->
     </application>
 </manifest>

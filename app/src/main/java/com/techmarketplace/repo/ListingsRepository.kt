@@ -1,29 +1,24 @@
 package com.techmarketplace.repo
 
-import android.app.Application
-import com.techmarketplace.net.ApiClient
 import com.techmarketplace.net.api.ListingApi
 import com.techmarketplace.net.dto.CatalogItemDto
 import com.techmarketplace.net.dto.CreateListingRequest
 import com.techmarketplace.net.dto.ListingDetailDto
 import com.techmarketplace.net.dto.SearchListingsResponse
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import retrofit2.HttpException
-import java.io.IOException
+import com.techmarketplace.net.dto.LocationIn
+import com.techmarketplace.storage.LocationStore
+import kotlinx.coroutines.flow.firstOrNull
 
-class ListingsRepository(private val app: Application) {
+class ListingsRepository(
+    private val api: ListingApi,
+    private val locationStore: LocationStore
+) {
 
-    private val api: ListingApi by lazy { ApiClient.listingApi() }
+    // -------- Catálogos ----------
+    suspend fun getCategories(): List<CatalogItemDto> = api.getCategories()
 
-    // -------- Catálogos --------
-    suspend fun getCategories(): Result<List<CatalogItemDto>> = safeCall {
-        api.getCategories()
-    }
-
-    suspend fun getBrands(categoryId: String? = null): Result<List<CatalogItemDto>> = safeCall {
+    suspend fun getBrands(categoryId: String? = null): List<CatalogItemDto> =
         api.getBrands(categoryId)
-    }
 
     // -------- Mis publicaciones --------
     suspend fun myListings(
@@ -79,30 +74,50 @@ class ListingsRepository(private val app: Application) {
             pageSize = pageSize,
             mine = mine,
             sellerId = sellerId
+        page: Int = 1,
+        pageSize: Int = 50
         )
     }
-
-    // -------- Detalle --------
-    suspend fun getListingDetail(id: String): Result<ListingDetailDto> = safeCall {
+    suspend fun getListingDetail(id: String): ListingDetailDto =
         api.getListingDetail(id)
-    }
 
-    // -------- Crear --------
-    suspend fun createListing(body: CreateListingRequest): Result<ListingDetailDto> = safeCall {
-        api.createListing(body)
-    }
+    // -------- Crear listing ----------
+    /**
+     * Inserta la ubicación guardada en DataStore (LocationStore) si existe.
+     * Si no hay ubicación guardada, NO envía el bloque `location`.
+     */
+    suspend fun createListing(
+        title: String,
+        description: String,
+        categoryId: String,
+        brandId: String? = null,
+        priceCents: Int,
+        currency: String = "COP",
+        condition: String,
+        quantity: Int = 1,
+        // Flags que entiende tu backend
+        priceSuggestionUsed: Boolean = false,
+        quickViewEnabled: Boolean = true
+    ): ListingDetailDto {
 
-    // -------- Helper común --------
-    private suspend fun <T> safeCall(block: suspend () -> T): Result<T> =
-        withContext(Dispatchers.IO) {
-            try {
-                Result.success(block())
-            } catch (e: HttpException) {
-                Result.failure(e)
-            } catch (e: IOException) {
-                Result.failure(e)
-            } catch (e: Exception) {
-                Result.failure(e)
-            }
-        }
+        // Leer lo que guardaste al pedir permisos (LocationGate)
+        val lat = locationStore.lastLatitudeFlow.firstOrNull()
+        val lon = locationStore.lastLongitudeFlow.firstOrNull()
+        val loc: LocationIn? = if (lat != null && lon != null) LocationIn(lat, lon) else null
+
+        val body = CreateListingRequest(
+            title = title,
+            description = description,
+            categoryId = categoryId,
+            brandId = brandId,
+            priceCents = priceCents,
+            currency = currency,
+            condition = condition,
+            quantity = quantity,
+            location = loc, // <-- se envía solo si existe
+            priceSuggestionUsed = priceSuggestionUsed,
+            quickViewEnabled = quickViewEnabled
+        )
+        return api.createListing(body)
+    }
 }

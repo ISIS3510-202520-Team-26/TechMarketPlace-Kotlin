@@ -1,34 +1,20 @@
 package com.techmarketplace
 
 import android.app.Application
-import android.content.Context
-import android.content.Intent
-import android.location.LocationManager
 import android.os.Bundle
-import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import androidx.core.content.getSystemService
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
 import com.techmarketplace.core.designsystem.TMTheme
 import com.techmarketplace.core.ui.BottomItem
 import com.techmarketplace.feature.auth.LoginScreen
@@ -36,7 +22,6 @@ import com.techmarketplace.feature.auth.RegisterScreen
 import com.techmarketplace.feature.cart.MyCartScreen
 import com.techmarketplace.feature.home.AddProductRoute
 import com.techmarketplace.feature.home.HomeRoute
-import com.techmarketplace.feature.onboarding.WelcomeScreen
 import com.techmarketplace.feature.order.OrderScreen
 import com.techmarketplace.feature.product.ProductDetailRoute
 import com.techmarketplace.feature.profile.ProfileRoute
@@ -122,8 +107,9 @@ class MainActivity : ComponentActivity() {
                                 onLogin = { email: String, pass: String ->
                                     authVM.login(email, pass) { ok: Boolean ->
                                         if (ok) {
-                                            Toast.makeText(context, "¡Bienvenido!", Toast.LENGTH_SHORT).show()
-                                            nav.navigate("locationGate") {
+                                            Toast.makeText(context, "Welcome!", Toast.LENGTH_SHORT).show()
+                                            // 👉 Ir DIRECTO al Home (sin LocationGate)
+                                            nav.navigate(BottomItem.Home.route) {
                                                 popUpTo("login") { inclusive = true }
                                             }
                                         } else {
@@ -147,8 +133,9 @@ class MainActivity : ComponentActivity() {
                                 onRegisterClick = { name: String, email: String, pass: String, campus: String? ->
                                     authVM.register(name, email, pass, campus) { ok: Boolean ->
                                         if (ok) {
-                                            Toast.makeText(context, "¡Cuenta creada!", Toast.LENGTH_SHORT).show()
-                                            nav.navigate("locationGate") {
+                                            Toast.makeText(context, "Account created!", Toast.LENGTH_SHORT).show()
+                                            // 👉 También directo al Home
+                                            nav.navigate(BottomItem.Home.route) {
                                                 popUpTo("login") { inclusive = true }
                                             }
                                         } else {
@@ -197,10 +184,14 @@ class MainActivity : ComponentActivity() {
 
                         // ORDER & CART
                         composable(BottomItem.Order.route) {
-                            OrderScreen(onNavigateBottom = { navigateBottom(BottomItem.Home) })
+                            OrderScreen(
+                                onNavigateBottom = { navigateBottom(BottomItem.Home) }
+                            )
                         }
                         composable(BottomItem.Cart.route) {
-                            MyCartScreen(onNavigateBottom = { navigateBottom(BottomItem.Home) })
+                            MyCartScreen(
+                                onNavigateBottom = { navigateBottom(BottomItem.Home) }
+                            )
                         }
 
                         // PROFILE — usa ProfileRoute
