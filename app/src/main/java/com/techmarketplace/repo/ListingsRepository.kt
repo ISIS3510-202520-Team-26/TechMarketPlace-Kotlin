@@ -20,21 +20,64 @@ class ListingsRepository(
     suspend fun getBrands(categoryId: String? = null): List<CatalogItemDto> =
         api.getBrands(categoryId)
 
-    // -------- Listados ----------
+    // -------- Mis publicaciones --------
+    suspend fun myListings(
+        page: Int = 1,
+        pageSize: Int = 20
+    ): Result<SearchListingsResponse> = safeCall {
+        api.searchListings(
+            mine = true,
+            page = page,
+            pageSize = pageSize
+        )
+    }
+
+    // -------- Publicaciones por vendedor --------
+    suspend fun listingsBySeller(
+        sellerId: String,
+        page: Int = 1,
+        pageSize: Int = 20
+    ): Result<SearchListingsResponse> = safeCall {
+        api.searchListings(
+            sellerId = sellerId,
+            page = page,
+            pageSize = pageSize
+        )
+    }
+
+    // -------- Listados / búsqueda (general) --------
     suspend fun searchListings(
         q: String? = null,
         categoryId: String? = null,
         brandId: String? = null,
+        minPrice: Int? = null,
+        maxPrice: Int? = null,
+        nearLat: Double? = null,
+        nearLon: Double? = null,
+        radiusKm: Double? = null,
+        page: Int? = 1,
+        pageSize: Int? = 20,
+        // NEW: permite reutilizar esta misma función en perfil
+        mine: Boolean? = null,
+        sellerId: String? = null
+    ): Result<SearchListingsResponse> = safeCall {
+        api.searchListings(
+            q = q,
+            categoryId = categoryId,
+            brandId = brandId,
+            minPrice = minPrice,
+            maxPrice = maxPrice,
+            nearLat = nearLat,
+            nearLon = nearLon,
+            radiusKm = radiusKm,
+            page = page,
+            pageSize = pageSize,
+            mine = mine,
+            sellerId = sellerId
         page: Int = 1,
         pageSize: Int = 50
-    ): SearchListingsResponse = api.searchListings(
-        q = q,
-        categoryId = categoryId,
-        brandId = brandId,
-        page = page,
-        pageSize = pageSize
-    )
-
+        )
+    }
     suspend fun getListingDetail(id: String): ListingDetailDto =
         api.getListingDetail(id)
 
