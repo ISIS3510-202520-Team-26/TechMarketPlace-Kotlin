@@ -1,20 +1,42 @@
 package com.techmarketplace
 
 import android.app.Application
+import android.content.Context
+import android.content.Intent
+import android.location.LocationManager
 import android.os.Bundle
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Surface
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.core.content.getSystemService
 import com.techmarketplace.core.designsystem.TMTheme
 import com.techmarketplace.core.ui.BottomItem
 import com.techmarketplace.feature.auth.LoginScreen
@@ -25,9 +47,12 @@ import com.techmarketplace.feature.home.HomeRoute
 import com.techmarketplace.feature.order.OrderScreen
 import com.techmarketplace.feature.product.ProductDetailRoute
 import com.techmarketplace.feature.profile.ProfileRoute
+import com.techmarketplace.feature.onboarding.WelcomeScreen
 import com.techmarketplace.net.ApiClient
 import com.techmarketplace.repo.AuthRepository
 import com.techmarketplace.ui.auth.LoginViewModel
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
