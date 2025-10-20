@@ -2,13 +2,16 @@
 kotlin = "2.0.21"
 androidx-core-ktx = "1.13.1"
 compose-bom = "2024.09.02"
+compose-compiler = "1.7.3"
 nav-compose = "2.8.0"
 retrofit = "2.11.0"
 okhttp = "4.12.0"
 kotlinx-serialization = "1.7.3"
 datastore = "1.1.1"
-retrofit-ks-converter = "1.0.0"
 coroutines = "1.8.1"
+coil = "2.6.0"
+lifecycle = "2.8.6"
+material = "1.13.0"
 
 # ÚNICAS versiones para Firebase y Play Services (sin duplicados)
 firebase-bom = "33.3.0"
@@ -21,7 +24,7 @@ play-services-location = "21.3.0"
 android-application = { id = "com.android.application", version = "8.13.0" }
 kotlin-android      = { id = "org.jetbrains.kotlin.android", version = "2.0.21" }
 kotlin-compose      = { id = "org.jetbrains.kotlin.plugin.compose", version = "2.0.21" }
-google-services     = { id = "com.google.gms.google-services", version = "4.4.2" }
+google-services     = { id = "com.google.gms.google-services", version = "4.4.3" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version = "2.0.21" }
 
 [libraries]
@@ -42,10 +45,11 @@ okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 okhttp-logging = { module = "com.squareup.okhttp3:logging-interceptor", version.ref = "okhttp" }
 
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
-retrofit-kotlinx-serialization = { module = "com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter", version.ref = "retrofit-ks-converter" }
+retrofit-kotlinx-serialization = { module = "com.squareup.retrofit2:converter-kotlinx-serialization", version.ref = "retrofit" }
 
 datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 
 # Firebase (sin versión porque usa BOM)
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebase-bom" }
@@ -63,3 +67,7 @@ androidx-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 androidx-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundation" }
 firebase-crashlytics-buildtools = { group = "com.google.firebase", name = "firebase-crashlytics-buildtools", version.ref = "firebase-crashlytics-buildtools" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "play-services-location" }
+coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coil" }
+androidx-lifecycle-viewmodel-ktx = { module = "androidx.lifecycle:lifecycle-viewmodel-ktx", version.ref = "lifecycle" }
+material = { module = "com.google.android.material:material", version.ref = "material" }
+androidx-compose-runtime-saveable = { module = "androidx.compose.runtime:runtime-saveable" }

@@ -4,10 +4,12 @@ import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.techmarketplace.net.ApiClient
 import com.techmarketplace.net.dto.ListingSummaryDto
 import com.techmarketplace.net.dto.UserMe
 import com.techmarketplace.repo.AuthRepository
 import com.techmarketplace.repo.ListingsRepository
+import com.techmarketplace.storage.LocationStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,10 +30,10 @@ data class ProfileUiState(
     val hasNext: Boolean = false
 )
 
-class ProfileViewModel(private val app: Application) : ViewModel() {
-
-    private val authRepo by lazy { AuthRepository(app) }
-    private val listingsRepo by lazy { ListingsRepository(app) }
+class ProfileViewModel(
+    private val authRepo: AuthRepository,
+    private val listingsRepo: ListingsRepository
+) : ViewModel() {
 
     private val _ui = MutableStateFlow(ProfileUiState(loading = true))
     val ui: StateFlow<ProfileUiState> = _ui.asStateFlow()
@@ -113,7 +115,12 @@ class ProfileViewModel(private val app: Application) : ViewModel() {
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return ProfileViewModel(app) as T
+                    val authRepository = AuthRepository(app)
+                    val listingsRepository = ListingsRepository(
+                        api = ApiClient.listingApi(),
+                        locationStore = LocationStore(app)
+                    )
+                    return ProfileViewModel(authRepository, listingsRepository) as T
                 }
             }
     }

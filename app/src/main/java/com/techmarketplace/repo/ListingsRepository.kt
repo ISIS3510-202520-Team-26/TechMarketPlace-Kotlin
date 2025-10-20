@@ -74,8 +74,6 @@ class ListingsRepository(
             pageSize = pageSize,
             mine = mine,
             sellerId = sellerId
-        page: Int = 1,
-        pageSize: Int = 50
         )
     }
     suspend fun getListingDetail(id: String): ListingDetailDto =
@@ -120,4 +118,11 @@ class ListingsRepository(
         )
         return api.createListing(body)
     }
+
+    private suspend fun <T> safeCall(block: suspend () -> T): Result<T> =
+        try {
+            Result.success(block())
+        } catch (t: Throwable) {
+            Result.failure(t)
+        }
 }
