@@ -1,7 +1,11 @@
 package com.techmarketplace.feature.auth
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
@@ -9,23 +13,19 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.techmarketplace.core.designsystem.GreenDark
 import com.techmarketplace.R
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.ui.text.PlatformTextStyle
-import kotlin.math.max
-import kotlin.math.min
+import com.techmarketplace.core.designsystem.GreenDark
 
 @Composable
 fun LoginScreen(
@@ -56,10 +56,14 @@ fun LoginScreen(
                 ),
                 shape = RoundedCornerShape(24.dp)
             ) {
+                val scrollState = rememberScrollState()
+
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 20.dp),
+                        .padding(horizontal = 20.dp)
+                        .verticalScroll(scrollState)
+                        .imePadding(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
@@ -98,9 +102,12 @@ fun LoginScreen(
                     var email by rememberSaveable { mutableStateOf("") }
                     var password by rememberSaveable { mutableStateOf("") }
 
+                    val maxEmailLength = 254
+                    val maxPasswordLength = 128
+
                     TMTextField(
                         value = email,
-                        onValueChange = { email = it },
+                        onValueChange = { email = it.take(maxEmailLength) },
                         placeholder = stringResource(R.string.auth_email_label),
                         isError = emailError != null,
                         supportingText = emailError,
@@ -109,7 +116,7 @@ fun LoginScreen(
                     Spacer(Modifier.height(14.dp))
                     TMTextField(
                         value = password,
-                        onValueChange = { password = it },
+                        onValueChange = { password = it.take(maxPasswordLength) },
                         placeholder = stringResource(R.string.auth_password_label),
                         isPassword = true,
                         isError = passwordError != null,
@@ -161,7 +168,7 @@ fun LoginScreen(
                             .height(56.dp)
                     )
 
-                    Spacer(Modifier.weight(1f))
+                    Spacer(Modifier.height(24.dp))
 
                     Row(
                         modifier = Modifier
