@@ -102,9 +102,12 @@ fun LoginScreen(
                     var email by rememberSaveable { mutableStateOf("") }
                     var password by rememberSaveable { mutableStateOf("") }
 
+                    val maxEmailLength = 254
+                    val maxPasswordLength = 128
+
                     TMTextField(
                         value = email,
-                        onValueChange = { email = it.take(AuthFieldLimits.MAX_EMAIL_LENGTH) },
+                        onValueChange = { email = it.take(maxEmailLength) },
                         placeholder = stringResource(R.string.auth_email_label),
                         isError = emailError != null,
                         supportingText = emailError,
@@ -113,7 +116,7 @@ fun LoginScreen(
                     Spacer(Modifier.height(14.dp))
                     TMTextField(
                         value = password,
-                        onValueChange = { password = it.take(AuthFieldLimits.MAX_PASSWORD_LENGTH) },
+                        onValueChange = { password = it.take(maxPasswordLength) },
                         placeholder = stringResource(R.string.auth_password_label),
                         isPassword = true,
                         isError = passwordError != null,
