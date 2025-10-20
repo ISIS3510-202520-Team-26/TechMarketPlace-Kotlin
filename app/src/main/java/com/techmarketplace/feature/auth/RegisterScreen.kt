@@ -116,7 +116,7 @@ fun RegisterScreen(
 
                 TMTextField(
                     value = username,
-                    onValueChange = { username = it },
+                    onValueChange = { username = it.take(AuthFieldLimits.MAX_NAME_LENGTH) },
                     placeholder = stringResource(R.string.auth_name_label),
                     isError = effNameError != null,
                     supportingText = effNameError,
@@ -126,7 +126,7 @@ fun RegisterScreen(
 
                 TMTextField(
                     value = email,
-                    onValueChange = { email = it },
+                    onValueChange = { email = it.take(AuthFieldLimits.MAX_EMAIL_LENGTH) },
                     placeholder = stringResource(R.string.auth_email_label),
                     isError = effEmailError != null,
                     supportingText = effEmailError,
@@ -136,7 +136,7 @@ fun RegisterScreen(
 
                 TMTextField(
                     value = pass,
-                    onValueChange = { pass = it },
+                    onValueChange = { pass = it.take(AuthFieldLimits.MAX_PASSWORD_LENGTH) },
                     placeholder = stringResource(R.string.auth_password_label),
                     isPassword = true,
                     isError = effPassError != null,
@@ -147,7 +147,7 @@ fun RegisterScreen(
 
                 TMTextField(
                     value = confirm,
-                    onValueChange = { confirm = it },
+                    onValueChange = { confirm = it.take(AuthFieldLimits.MAX_PASSWORD_LENGTH) },
                     placeholder = stringResource(R.string.auth_confirm_password_label),
                     isPassword = true,
                     isError = effConfirmError != null,
@@ -158,7 +158,7 @@ fun RegisterScreen(
 
                 TMTextField(
                     value = campus,
-                    onValueChange = { campus = it },
+                    onValueChange = { campus = it.take(AuthFieldLimits.MAX_CAMPUS_LENGTH) },
                     placeholder = stringResource(R.string.auth_campus_label),
                     enabled = !loading
                 )
