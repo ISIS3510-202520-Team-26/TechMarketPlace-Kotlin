@@ -72,7 +72,7 @@ fun AddProductRoute(
         categories = catalogsState.categories,
         brands = catalogsState.brands,
         onCancel = onCancel,
-        onSave = { title, description, categoryId, brandId, priceText, condition, quantity ->
+        onSave = { title, description, categoryId, brandId, priceText, condition, quantity, imageUri ->
             val priceCents = ((priceText.toDoubleOrNull() ?: 0.0)).roundToInt()
 
             vm.createListing(
@@ -83,13 +83,14 @@ fun AddProductRoute(
                 priceCents = priceCents,
                 currency = "COP",
                 condition = condition,
-                quantity = quantity.toIntOrNull() ?: 1
-            ) { ok, err ->
+                quantity = quantity.toIntOrNull() ?: 1,
+                imageUri = imageUri
+            ) { ok, message ->
                 if (ok) {
-                    Toast.makeText(ctx, "Listing created!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, message ?: "Listing created!", Toast.LENGTH_SHORT).show()
                     onSaved()
                 } else {
-                    Toast.makeText(ctx, err ?: "Error creating listing", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, message ?: "Error creating listing", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -110,7 +111,8 @@ fun AddProductScreen(
         brandId: String,
         price: String,
         condition: String,
-        quantity: String
+        quantity: String,
+        imageUri: Uri?
     ) -> Unit
 ) {
     val ctx = LocalContext.current
@@ -165,7 +167,8 @@ fun AddProductScreen(
                                 selectedBrand,
                                 price.trim(),
                                 condition,
-                                quantity.trim()
+                                quantity.trim(),
+                                imageUri
                             )
                         },
                         enabled = canSave
