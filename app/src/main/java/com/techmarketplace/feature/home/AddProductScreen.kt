@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -28,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -42,10 +44,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.techmarketplace.net.dto.CatalogItemDto
 import com.techmarketplace.storage.LocationStore
 import com.techmarketplace.ui.listings.ListingsViewModel
-import kotlin.math.roundToInt
 import java.io.File
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import retrofit2.HttpException
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.height
@@ -64,6 +68,7 @@ fun AddProductRoute(
     val ctx = LocalContext.current
     val app = ctx.applicationContext as Application
     val vm: ListingsViewModel = viewModel(factory = ListingsViewModel.factory(app))
+    val scope = rememberCoroutineScope()
 
     val catalogsState by vm.catalogs.collectAsState()
     LaunchedEffect(Unit) { vm.refreshCatalogs() }
@@ -72,25 +77,65 @@ fun AddProductRoute(
         categories = catalogsState.categories,
         brands = catalogsState.brands,
         onCancel = onCancel,
-        onSave = { title, description, categoryId, brandId, priceText, condition, quantity ->
+        onSave = { title, description, categoryId, brandId, priceText, condition, quantity, imageUri ->
             val priceCents = ((priceText.toDoubleOrNull() ?: 0.0)).roundToInt()
 
-            vm.createListing(
-                title = title,
-                description = description,
-                categoryId = categoryId,
-                brandId = brandId.ifBlank { null },
-                priceCents = priceCents,
-                currency = "COP",
-                condition = condition,
-                quantity = quantity.toIntOrNull() ?: 1
-            ) { ok, err ->
-                if (ok) {
-                    Toast.makeText(ctx, "Listing created!", Toast.LENGTH_SHORT).show()
-                    onSaved()
-                } else {
-                    Toast.makeText(ctx, err ?: "Error creating listing", Toast.LENGTH_SHORT).show()
-                }
+            scope.launch {
+                val result = vm.createListing(
+                    title = title,
+                    description = description,
+                    categoryId = categoryId,
+                    brandId = brandId.ifBlank { null },
+                    priceCents = priceCents,
+                    currency = "COP",
+                    condition = condition,
+                    quantity = quantity.toIntOrNull() ?: 1
+                )
+
+                result.fold(
+                    onSuccess = { listing ->
+                        if (imageUri != null) {
+                            val bytes = try {
+                                readBytesFromUri(ctx, imageUri)
+                            } catch (e: Exception) {
+                                Toast.makeText(
+                                    ctx,
+                                    "Listing created but could not read image: ${e.message ?: "Unknown error"}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                                onSaved()
+                                return@launch
+                            }
+
+                            val contentType = ctx.contentResolver.getType(imageUri) ?: "image/jpeg"
+                            val filename = ctx.resolveDisplayName(imageUri)
+                                ?: "listing-${listing.id}.jpg"
+                            val uploadResult = vm.uploadListingImage(
+                                listingId = listing.id,
+                                filename = filename,
+                                contentType = contentType,
+                                bytes = bytes
+                            )
+
+                            if (uploadResult.isFailure) {
+                                val uploadError = uploadResult.exceptionOrNull()
+                                Toast.makeText(
+                                    ctx,
+                                    "Listing created but photo failed: ${uploadError?.toUserMessage() ?: "Unknown error"}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                                onSaved()
+                                return@launch
+                            }
+                        }
+
+                        Toast.makeText(ctx, "Listing created!", Toast.LENGTH_SHORT).show()
+                        onSaved()
+                    },
+                    onFailure = { error ->
+                        Toast.makeText(ctx, error.toUserMessage(), Toast.LENGTH_SHORT).show()
+                    }
+                )
             }
         }
     )
@@ -110,7 +155,8 @@ fun AddProductScreen(
         brandId: String,
         price: String,
         condition: String,
-        quantity: String
+        quantity: String,
+        imageUri: Uri?
     ) -> Unit
 ) {
     val ctx = LocalContext.current
@@ -165,7 +211,8 @@ fun AddProductScreen(
                                 selectedBrand,
                                 price.trim(),
                                 condition,
-                                quantity.trim()
+                                quantity.trim(),
+                                imageUri
                             )
                         },
                         enabled = canSave
@@ -422,4 +469,34 @@ private fun rememberBitmapFromUri(
         }
     }
     return state
+}
+
+private suspend fun readBytesFromUri(context: Context, uri: Uri): ByteArray =
+    withContext(Dispatchers.IO) {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            input.readBytes()
+        } ?: throw IllegalStateException("Unable to open uri: $uri")
+    }
+
+private fun Context.resolveDisplayName(uri: Uri): String? {
+    if (uri.scheme == "content") {
+        return contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { cursor ->
+                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (index != -1 && cursor.moveToFirst()) {
+                    cursor.getString(index)
+                } else {
+                    null
+                }
+            }
+    }
+    return uri.lastPathSegment
+}
+
+private fun Throwable.toUserMessage(): String = when (this) {
+    is HttpException -> {
+        val body = runCatching { response()?.errorBody()?.string() }.getOrNull()
+        "HTTP ${code()}${if (!body.isNullOrBlank()) " – $body" else ""}"
+    }
+    else -> message ?: "Network error"
 }

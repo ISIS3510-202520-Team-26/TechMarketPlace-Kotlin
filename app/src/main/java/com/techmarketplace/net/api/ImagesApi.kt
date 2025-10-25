@@ -9,7 +9,7 @@ interface ImagesApi {
     suspend fun presign(@Body body: PresignImageIn): PresignImageOut
 
     @POST("images/confirm")
-    suspend fun confirm(@Body body: ConfirmImageIn)
+    suspend fun confirm(@Body body: ConfirmImageIn): ConfirmImageOut
 }
 
 @Serializable
@@ -29,4 +29,9 @@ data class PresignImageOut(
 data class ConfirmImageIn(
     val listing_id: String,
     val object_key: String
+)
+
+@Serializable
+data class ConfirmImageOut(
+    val preview_url: String
 )

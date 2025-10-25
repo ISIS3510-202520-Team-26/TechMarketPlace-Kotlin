@@ -9,11 +9,13 @@ import com.techmarketplace.net.ApiClient
 import com.techmarketplace.net.dto.CatalogItemDto
 import com.techmarketplace.net.dto.SearchListingsResponse
 import com.techmarketplace.repo.ListingsRepository
+import com.techmarketplace.repo.ImagesRepository
 import com.techmarketplace.storage.LocationStore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import retrofit2.HttpException
+import kotlinx.coroutines.withContext
 
 data class CatalogsState(
     val categories: List<CatalogItemDto> = emptyList(),
@@ -22,7 +24,8 @@ data class CatalogsState(
 
 class ListingsViewModel(
     app: Application,
-    private val repo: ListingsRepository
+    private val repo: ListingsRepository,
+    private val imagesRepo: ImagesRepository
 ) : AndroidViewModel(app) {
 
     private val _catalogs = MutableStateFlow(CatalogsState())
@@ -40,7 +43,7 @@ class ListingsViewModel(
         }
     }
 
-    fun createListing(
+    suspend fun createListing(
         title: String,
         description: String,
         categoryId: String,
@@ -48,31 +51,32 @@ class ListingsViewModel(
         priceCents: Int,
         currency: String,
         condition: String,
-        quantity: Int,
-        onResult: (ok: Boolean, msg: String?) -> Unit
-    ) {
-        viewModelScope.launch {
-            try {
-                repo.createListing(
-                    title = title,
-                    description = description,
-                    categoryId = categoryId,
-                    brandId = brandId,
-                    priceCents = priceCents,
-                    currency = currency,
-                    condition = condition,
-                    quantity = quantity,
-                    // flags opcionales
-                    priceSuggestionUsed = false,
-                    quickViewEnabled = true
-                )
-                onResult(true, null)
-            } catch (e: HttpException) {
-                val body = e.response()?.errorBody()?.string()
-                onResult(false, "HTTP ${e.code()}${if (!body.isNullOrBlank()) " – $body" else ""}")
-            } catch (e: Exception) {
-                onResult(false, e.message ?: "Network error")
-            }
+        quantity: Int
+    ): Result<ListingDetailDto> = withContext(Dispatchers.IO) {
+        runCatching {
+            repo.createListing(
+                title = title,
+                description = description,
+                categoryId = categoryId,
+                brandId = brandId,
+                priceCents = priceCents,
+                currency = currency,
+                condition = condition,
+                quantity = quantity,
+                priceSuggestionUsed = false,
+                quickViewEnabled = true
+            )
+        }
+    }
+
+    suspend fun uploadListingImage(
+        listingId: String,
+        filename: String,
+        contentType: String,
+        bytes: ByteArray
+    ): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            imagesRepo.uploadListingImage(listingId, filename, contentType, bytes)
         }
     }
 
@@ -81,9 +85,11 @@ class ListingsViewModel(
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 val api = ApiClient.listingApi()
+                val imagesApi = ApiClient.imagesApi()
                 val store = LocationStore(app)  // <- aquí inyectamos la ubicación guardada
                 val repository = ListingsRepository(api, store)
-                return ListingsViewModel(app, repository) as T
+                val imagesRepository = ImagesRepository(imagesApi)
+                return ListingsViewModel(app, repository, imagesRepository) as T
             }
         }
     }
