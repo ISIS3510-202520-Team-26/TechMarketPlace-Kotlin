@@ -38,6 +38,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.techmarketplace.net.dto.CatalogItemDto
 import com.techmarketplace.storage.LocationStore
@@ -65,14 +66,14 @@ fun AddProductRoute(
     val app = ctx.applicationContext as Application
     val vm: ListingsViewModel = viewModel(factory = ListingsViewModel.factory(app))
 
-    val catalogsState by vm.catalogs.collectAsState()
+    val catalogsState by vm.catalogs.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { vm.refreshCatalogs() }
 
     AddProductScreen(
         categories = catalogsState.categories,
         brands = catalogsState.brands,
         onCancel = onCancel,
-        onSave = { title, description, categoryId, brandId, priceText, condition, quantity ->
+        onSave = { title, description, categoryId, brandId, priceText, condition, quantity, imageUri ->
             val priceCents = ((priceText.toDoubleOrNull() ?: 0.0)).roundToInt()
 
             vm.createListing(
@@ -83,13 +84,14 @@ fun AddProductRoute(
                 priceCents = priceCents,
                 currency = "COP",
                 condition = condition,
-                quantity = quantity.toIntOrNull() ?: 1
-            ) { ok, err ->
+                quantity = quantity.toIntOrNull() ?: 1,
+                imageUri = imageUri
+            ) { ok, message ->
                 if (ok) {
-                    Toast.makeText(ctx, "Listing created!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, message ?: "Listing created!", Toast.LENGTH_SHORT).show()
                     onSaved()
                 } else {
-                    Toast.makeText(ctx, err ?: "Error creating listing", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, message ?: "Error creating listing", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -110,7 +112,8 @@ fun AddProductScreen(
         brandId: String,
         price: String,
         condition: String,
-        quantity: String
+        quantity: String,
+        imageUri: Uri?
     ) -> Unit
 ) {
     val ctx = LocalContext.current
@@ -165,7 +168,8 @@ fun AddProductScreen(
                                 selectedBrand,
                                 price.trim(),
                                 condition,
-                                quantity.trim()
+                                quantity.trim(),
+                                imageUri
                             )
                         },
                         enabled = canSave
