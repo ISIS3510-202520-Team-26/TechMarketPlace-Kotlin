@@ -38,6 +38,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.techmarketplace.net.dto.CatalogItemDto
 import com.techmarketplace.storage.LocationStore
@@ -65,7 +66,7 @@ fun AddProductRoute(
     val app = ctx.applicationContext as Application
     val vm: ListingsViewModel = viewModel(factory = ListingsViewModel.factory(app))
 
-    val catalogsState by vm.catalogs.collectAsState()
+    val catalogsState by vm.catalogs.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { vm.refreshCatalogs() }
 
     AddProductScreen(

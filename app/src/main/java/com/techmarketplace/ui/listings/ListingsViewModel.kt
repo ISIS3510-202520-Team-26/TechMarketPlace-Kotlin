@@ -10,7 +10,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.techmarketplace.net.ApiClient
 import com.techmarketplace.net.dto.CatalogItemDto
-import com.techmarketplace.net.dto.SearchListingsResponse
+import com.techmarketplace.repo.ListingImagesRepository
 import com.techmarketplace.repo.ListingsRepository
 import com.techmarketplace.repo.ImagesRepository
 import com.techmarketplace.storage.LocationStore
