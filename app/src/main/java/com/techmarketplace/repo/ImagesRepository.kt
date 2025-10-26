@@ -13,7 +13,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
-class ListingImagesRepository(
+class ImagesRepository(
     private val api: ImagesApi
 ) {
 
