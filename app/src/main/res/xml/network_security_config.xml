@@ -1,19 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<network-security-config
-    xmlns:android="http://schemas.android.com/apk/res/android">
-
-    <!-- Allow cleartext only to your dev backends.
-         You can have multiple <domain> entries inside the same <domain-config>. -->
+<network-security-config>
     <domain-config cleartextTrafficPermitted="true">
-        <!-- Physical device talking to your laptop/desktop over LAN -->
-        <domain includeSubdomains="true">172.20.10.4</domain>
-
-        <!-- Emulator-only alias to host loopback (keep if you sometimes use the emulator) -->
         <domain includeSubdomains="true">10.0.2.2</domain>
-
-        <!-- If you ever use “localhost” name via a proxy, leave this -->
-        <domain>localhost</domain>
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
     </domain-config>
-
 </network-security-config>
-

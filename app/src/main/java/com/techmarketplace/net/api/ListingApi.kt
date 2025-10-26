@@ -20,12 +20,6 @@ interface ListingApi {
     ): List<CatalogItemDto>
 
     // ---- Listado / búsqueda ----
-    /**
-     * Búsqueda de publicaciones.
-     * Soporta filtros para el perfil: [mine]=true (del usuario logueado)
-     * o [sellerId] (UUID del vendedor). El backend usa paginación con
-     * [page]/[pageSize].
-     */
     @GET("listings")
     suspend fun searchListings(
         @Query("q") q: String? = null,
@@ -36,12 +30,8 @@ interface ListingApi {
         @Query("near_lat") nearLat: Double? = null,
         @Query("near_lon") nearLon: Double? = null,
         @Query("radius_km") radiusKm: Double? = null,
-
-        // --- NUEVOS filtros de perfil ---
         @Query("mine") mine: Boolean? = null,
         @Query("seller_id") sellerId: String? = null,
-
-        // --- Paginación del backend ---
         @Query("page") page: Int? = 1,
         @Query("page_size") pageSize: Int? = 20
     ): SearchListingsResponse

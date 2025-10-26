@@ -36,21 +36,24 @@ object ApiClient {
     private lateinit var okHttp: OkHttpClient
     private lateinit var retrofit: Retrofit
 
+    // Config de kotlinx-serialization (coincide con tus @Serializable)
     private val json = Json {
         ignoreUnknownKeys = true
         explicitNulls = false
         encodeDefaults = true
     }
 
+    // Factories de APIs (todas usan el mismo Retrofit con kotlinx-serialization)
     fun listingApi(): ListingApi = retrofit.create()
-    fun imagesApi(): ImagesApi = retrofit.create()
+    fun imagesApi(): ImagesApi = retrofit.create(ImagesApi::class.java)
     fun authApi(): AuthApi = retrofit.create()
     fun telemetryApi(): TelemetryApi = retrofit.create()
+
     fun ordersApi(): OrdersApi = retrofit.create()
     fun paymentsApi(): PaymentsApi = retrofit.create()
     fun priceSuggestionsApi(): PriceSuggestionsApi = retrofit.create()
 
-    /** Call once from Application or Activity: ApiClient.init(applicationContext) */
+    /** Llamar una vez desde Application o Activity: ApiClient.init(applicationContext) */
     fun init(appContext: Context) {
         if (this::tokenStore.isInitialized) return
         tokenStore = TokenStore(appContext)
@@ -60,6 +63,7 @@ object ApiClient {
             else HttpLoggingInterceptor.Level.NONE
         }
 
+        // Interceptor que agrega Accept y Authorization (cuando aplique)
         val authHeaderInterceptor = Interceptor { chain ->
             val original = chain.request()
             val path = original.url.encodedPath
@@ -77,6 +81,7 @@ object ApiClient {
             chain.proceed(builder.build())
         }
 
+        // Authenticator para refrescar tokens en 401 (evita bucles y no refresca en /auth/*)
         val refreshAuthenticator = object : Authenticator {
             override fun authenticate(route: Route?, response: Response): Request? {
                 if (responseCount(response) >= 2) return null
@@ -90,6 +95,7 @@ object ApiClient {
                     val refreshed = try {
                         val refresh = runBlocking { tokenStore.refreshToken.firstOrNull() } ?: return null
 
+                        // Retrofit "plano" y corto sólo para el refresh
                         val plainRetrofit = Retrofit.Builder()
                             .baseUrl(BuildConfig.API_BASE_URL)
                             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
@@ -132,17 +138,19 @@ object ApiClient {
             }
         }
 
+        // Cliente "principal" para TODAS las APIs (incluida ImagesApi para presign/confirm)
+        // NOTA: El PUT a MinIO NO usa este cliente; lo hace ImagesRepository con un OkHttp plano.
         okHttp = OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
-            .writeTimeout(15, TimeUnit.SECONDS)
+            .connectTimeout(30, TimeUnit.SECONDS)     // un poco más generoso que antes
+            .readTimeout(2, TimeUnit.MINUTES)         // confirma/presign pueden tardar más si el server está ocupado
+            .writeTimeout(2, TimeUnit.MINUTES)
             .addInterceptor(authHeaderInterceptor)
             .addInterceptor(logging)
             .authenticator(refreshAuthenticator)
             .build()
 
         retrofit = Retrofit.Builder()
-            .baseUrl(BuildConfig.API_BASE_URL)
+            .baseUrl(BuildConfig.API_BASE_URL) // ej: http://10.0.2.2:8000/  (con /v1 si tu base lo incluye)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .client(okHttp)
             .build()

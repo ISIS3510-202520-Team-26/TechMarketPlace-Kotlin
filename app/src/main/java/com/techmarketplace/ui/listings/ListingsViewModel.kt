@@ -4,25 +4,27 @@ import android.app.Application
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.techmarketplace.net.ApiClient
 import com.techmarketplace.net.dto.CatalogItemDto
-import com.techmarketplace.repo.ListingImagesRepository
 import com.techmarketplace.repo.ListingsRepository
-import com.techmarketplace.repo.ImagesRepository
+import com.techmarketplace.repo.ListingImagesRepository
 import com.techmarketplace.storage.LocationStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import retrofit2.HttpException
 import java.io.File
 import java.io.IOException
 import java.util.Locale
-import retrofit2.HttpException
+
+private const val TAG = "ListingsVM"
 
 data class CatalogsState(
     val categories: List<CatalogItemDto> = emptyList(),
@@ -32,7 +34,7 @@ data class CatalogsState(
 class ListingsViewModel(
     app: Application,
     private val repo: ListingsRepository,
-    private val imagesRepo: ImagesRepository
+    private val imagesRepo: ListingImagesRepository
 ) : AndroidViewModel(app) {
 
     private val _catalogs = MutableStateFlow(CatalogsState())
@@ -44,8 +46,8 @@ class ListingsViewModel(
                 val cats = repo.getCategories()
                 val brs = repo.getBrands(categoryIdForBrands)
                 _catalogs.value = CatalogsState(categories = cats, brands = brs)
-            } catch (_: Exception) {
-                // ignora por ahora o loguea
+            } catch (e: Exception) {
+                Log.w(TAG, "refreshCatalogs failed", e)
             }
         }
     }
@@ -64,6 +66,7 @@ class ListingsViewModel(
     ) {
         viewModelScope.launch {
             try {
+                // 1) leer bytes/metadata si hay imagen
                 val imageData = try {
                     imageUri?.let { resolveImageData(it) }
                 } catch (e: Exception) {
@@ -71,7 +74,8 @@ class ListingsViewModel(
                     return@launch
                 }
 
-                repo.createListing(
+                // 2) crear listing
+                val detail = repo.createListing(
                     title = title,
                     description = description,
                     categoryId = categoryId,
@@ -80,25 +84,28 @@ class ListingsViewModel(
                     currency = currency,
                     condition = condition,
                     quantity = quantity,
-                    // flags opcionales
                     priceSuggestionUsed = false,
                     quickViewEnabled = true
-                ).also { detail ->
-                    if (imageData != null) {
-                        try {
-                            imagesRepo.uploadListingPhoto(
-                                listingId = detail.id,
-                                filename = imageData.filename,
-                                contentType = imageData.contentType,
-                                bytes = imageData.bytes
-                            )
-                        } catch (uploadError: Exception) {
-                            val message = uploadError.message ?: "Failed to upload photo"
-                            onResult(true, "Listing created but photo upload failed: $message")
-                            return@launch
-                        }
+                )
+
+                // 3) si había imagen: presign -> PUT -> confirm -> preview (en repo)
+                if (imageData != null) {
+                    try {
+                        val previewUrl = imagesRepo.uploadListingPhoto(
+                            listingId = detail.id,
+                            fileName = imageData.filename,       // 👈 importante: filename real
+                            contentType = imageData.contentType,
+                            bytes = imageData.bytes
+                        )
+                        Log.i(TAG, "Image upload OK. previewUrl=$previewUrl")
+                    } catch (uploadError: Exception) {
+                        Log.e(TAG, "Image upload failed", uploadError)
+                        val message = uploadError.message ?: "Failed to upload photo"
+                        onResult(true, "Listing created but photo upload failed: $message")
+                        return@launch
                     }
                 }
+
                 onResult(true, null)
             } catch (e: HttpException) {
                 val body = e.response()?.errorBody()?.string()
@@ -115,9 +122,9 @@ class ListingsViewModel(
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 val api = ApiClient.listingApi()
                 val imagesApi = ApiClient.imagesApi()
-                val store = LocationStore(app)  // <- aquí inyectamos la ubicación guardada
+                val store = LocationStore(app)
                 val repository = ListingsRepository(api, store)
-                val imagesRepository = ImagesRepository(imagesApi)
+                val imagesRepository = ListingImagesRepository(imagesApi)
                 return ListingsViewModel(app, repository, imagesRepository) as T
             }
         }
@@ -138,9 +145,7 @@ private suspend fun ListingsViewModel.resolveImageData(uri: Uri): ImageUploadDat
     val contentType = resolver.getType(uri)?.takeIf { it.isNotBlank() }
         ?: guessContentType(name)
     val bytes = withContext(Dispatchers.IO) {
-        resolver.openInputStream(uri)?.use { stream ->
-            stream.readBytes()
-        }
+        resolver.openInputStream(uri)?.use { stream -> stream.readBytes() }
     } ?: throw IOException("Unable to read image bytes")
 
     return ImageUploadData(
@@ -157,16 +162,13 @@ private fun getFileName(resolver: ContentResolver, uri: Uri): String? {
                 val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
                 if (index != -1) {
                     val name = cursor.getString(index)
-                    if (!name.isNullOrBlank()) {
-                        return name
-                    }
+                    if (!name.isNullOrBlank()) return name
                 }
             }
         }
     } else if (uri.scheme == ContentResolver.SCHEME_FILE) {
         return File(uri.path ?: return null).name
     }
-
     return uri.lastPathSegment
 }
 
