@@ -7,9 +7,6 @@ import retrofit2.http.POST
 interface ImagesApi {
     @POST("images/presign")
     suspend fun presign(@Body body: PresignImageIn): PresignImageOut
-
-    @POST("images/confirm")
-    suspend fun confirm(@Body body: ConfirmImageIn)
 }
 
 @Serializable
@@ -25,8 +22,3 @@ data class PresignImageOut(
     val object_key: String    // clave que luego confirmamos
 )
 
-@Serializable
-data class ConfirmImageIn(
-    val listing_id: String,
-    val object_key: String
-)
