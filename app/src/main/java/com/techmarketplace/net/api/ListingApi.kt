@@ -4,6 +4,8 @@ import com.techmarketplace.net.dto.CatalogItemDto
 import com.techmarketplace.net.dto.CreateListingRequest
 import com.techmarketplace.net.dto.ListingDetailDto
 import com.techmarketplace.net.dto.SearchListingsResponse
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import retrofit2.http.*
 
 interface ListingApi {
@@ -55,4 +57,20 @@ interface ListingApi {
     suspend fun createListing(
         @Body body: CreateListingRequest
     ): ListingDetailDto
+
+    @POST("listings/{id}/image")
+    suspend fun attachListingImage(
+        @Path("id") id: String,
+        @Body body: AttachListingImageIn
+    ): AttachListingImageOut
 }
+
+@Serializable
+data class AttachListingImageIn(
+    val object_key: String
+)
+
+@Serializable
+data class AttachListingImageOut(
+    @SerialName("preview_url") val previewUrl: String? = null
+)

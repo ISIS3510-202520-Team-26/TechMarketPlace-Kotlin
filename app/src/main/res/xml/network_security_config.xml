@@ -9,6 +9,7 @@
         <domain includeSubdomains="true">172.20.10.4</domain>
 
         <!-- Emulator-only alias to host loopback (keep if you sometimes use the emulator) -->
+        <domain includeSubdomains="true">10.0.2.2</domain>
 
         <!-- If you ever use “localhost” name via a proxy, leave this -->
         <domain>localhost</domain>
