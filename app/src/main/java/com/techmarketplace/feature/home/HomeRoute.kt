@@ -2,6 +2,7 @@ package com.techmarketplace.feature.home
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -22,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -29,9 +31,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.techmarketplace.core.ui.BottomBar
 import com.techmarketplace.core.ui.BottomItem
 import com.techmarketplace.net.ApiClient
+import com.techmarketplace.net.api.ImagesApi
 import com.techmarketplace.storage.LocationStore
 import com.techmarketplace.storage.getAndSaveLocation
 import kotlinx.coroutines.launch
@@ -41,7 +46,8 @@ private data class UiCategory(val id: String, val name: String)
 private data class UiProduct(
     val id: String,
     val title: String,
-    val price: Double
+    val price: Double,
+    val imageUrl: String?
 )
 
 private val GreenDark = Color(0xFF0F4D3A)
@@ -54,9 +60,26 @@ fun HomeRoute(
     onNavigateBottom: (BottomItem) -> Unit
 ) {
     val api = remember { ApiClient.listingApi() }
+    val imagesApi: ImagesApi = remember { ApiClient.imagesApi() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val store = remember { LocationStore(context) }
+
+    // Base pública del bucket (para fallback sin firma, NO para preview firmada)
+    val MINIO_PUBLIC_BASE = remember { "http://10.0.2.2:9000/market-images/" }
+
+    fun emulatorize(url: String): String {
+        return url
+            .replace("http://localhost", "http://10.0.2.2")
+            .replace("http://127.0.0.1", "http://10.0.2.2")
+    }
+    fun fixEmulatorHost(url: String?): String? = url?.let { emulatorize(it) }
+
+    fun publicFromObjectKey(objectKey: String): String {
+        val base = if (MINIO_PUBLIC_BASE.endsWith("/")) MINIO_PUBLIC_BASE else "$MINIO_PUBLIC_BASE/"
+        val key = if (objectKey.startsWith("/")) objectKey.drop(1) else objectKey
+        return emulatorize(base + key)
+    }
 
     // === Permisos & primer guardado ===
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -65,7 +88,6 @@ fun HomeRoute(
         val granted = (result[Manifest.permission.ACCESS_FINE_LOCATION] == true) ||
                 (result[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
         if (granted) {
-            // Guardar/actualizar ubicación en cuanto otorga permiso
             scope.launch { getAndSaveLocation(context, store) }
         }
     }
@@ -86,7 +108,6 @@ fun HomeRoute(
                 )
             )
         } else {
-            // Si ya estaba concedido, refrescar/guardar última ubicación
             getAndSaveLocation(context, store)
         }
     }
@@ -107,9 +128,9 @@ fun HomeRoute(
     var didInitialFetch by remember { mutableStateOf(false) }
     var categoriesLoaded by remember { mutableStateOf(false) }
 
-    // ====== NUEVO: Filtro por cercanía ======
+    // Filtro por cercanía
     var nearEnabled by remember { mutableStateOf(false) }
-    var radiusKm by remember { mutableStateOf(5f) } // 5 km por defecto
+    var radiusKm by remember { mutableStateOf(5f) }
 
     suspend fun listOnce(
         q: String? = null,
@@ -131,11 +152,40 @@ fun HomeRoute(
             page = 1,
             pageSize = 50
         )
-        return res.items.map {
+
+        // Para cada listing: usa image_url si viene; si no, firma con /images/preview
+        return res.items.map { dto ->
+            val firstPhoto = dto.photos.firstOrNull()
+
+            val resolvedUrl: String? = when {
+                firstPhoto == null -> null
+
+                // Si el backend ya trae un URL; si está firmada (contiene X-Amz-), NO tocarla.
+                !firstPhoto.imageUrl.isNullOrBlank() -> {
+                    val url = firstPhoto.imageUrl!!
+                    if (url.contains("X-Amz-")) url         // firmada → no tocar host
+                    else fixEmulatorHost(url)                // no firmada → puedes normalizar host
+                }
+
+                // Si sólo trae storage_key → pedimos preview firmada y NO la tocamos.
+                !firstPhoto.storageKey.isNullOrBlank() -> {
+                    try {
+                        val preview = imagesApi.getPreview(firstPhoto.storageKey!!)
+                        preview.preview_url // pasar tal cual (firma depende del host)
+                    } catch (_: Exception) {
+                        // Fallback público: no firmado → aquí SÍ puedes emulatorizar
+                        publicFromObjectKey(firstPhoto.storageKey!!)
+                    }
+                }
+
+                else -> null
+            }
+
             UiProduct(
-                id = it.id,
-                title = it.title,
-                price = it.priceCents.toDouble()
+                id = dto.id,
+                title = dto.title,
+                price = dto.priceCents.toDouble(),
+                imageUrl = resolvedUrl
             )
         }
     }
@@ -222,7 +272,6 @@ fun HomeRoute(
             bottomSpace = bottomSpace,
             lat = lat,
             lon = lon,
-            // props del filtro cercano
             nearEnabled = nearEnabled,
             onToggleNear = { nearEnabled = it },
             radiusKm = radiusKm,
@@ -252,7 +301,6 @@ private fun HomeScreenContent(
     bottomSpace: Dp,
     lat: Double?,
     lon: Double?,
-    // cercanía
     nearEnabled: Boolean,
     onToggleNear: (Boolean) -> Unit,
     radiusKm: Float,
@@ -272,7 +320,7 @@ private fun HomeScreenContent(
         ) {
             Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
 
-            // Header con coordenadas actuales guardadas
+            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -280,9 +328,6 @@ private fun HomeScreenContent(
             ) {
                 Column {
                     Text("Home", color = GreenDark, fontSize = 32.sp, fontWeight = FontWeight.SemiBold)
-                    //val lt = lat?.let { String.format("%.5f", it) } ?: "—"
-                    //val ln = lon?.let { String.format("%.5f", it) } ?: "—"
-                    //Text("lat $lt  ·  lon $ln", color = Color(0xFF6B7783), fontSize = 12.sp)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     RoundIcon(Icons.Outlined.Search) { }
@@ -338,7 +383,7 @@ private fun HomeScreenContent(
 
             Spacer(Modifier.height(16.dp))
 
-            // ====== NUEVO: Bloque de filtro por cercanía ======
+            // Filtro por cercanía
             Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = Color(0xFFF5F5F5),
@@ -354,16 +399,12 @@ private fun HomeScreenContent(
                         Column {
                             Text("Near me", color = GreenDark, fontWeight = FontWeight.SemiBold)
                             val locOk = lat != null && lon != null
-                            val hint = if (locOk) {
-                                "Filter by localization, location saved"
-                            } else {
-                                "Ubicación no disponible todavía"
-                            }
+                            val hint = if (locOk) "Filter by localization, location saved" else "Ubicación no disponible todavía"
                             Text(hint, color = Color(0xFF6B7783), fontSize = 12.sp)
                         }
                         Switch(
                             checked = nearEnabled,
-                            onCheckedChange = { onToggleNear(it) },
+                            onCheckedChange = onToggleNear,
                             enabled = lat != null && lon != null
                         )
                     }
@@ -375,7 +416,7 @@ private fun HomeScreenContent(
                             value = radiusKm,
                             onValueChange = onRadiusChange,
                             valueRange = 1f..50f,
-                            steps = 48 // (50-1) – 1
+                            steps = 48
                         )
                     }
                 }
@@ -398,7 +439,7 @@ private fun HomeScreenContent(
                 loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
-                error != null -> ErrorBlock(error, onRetry)
+                error != null -> ErrorBlock(error ?: "Error", onRetry = onRetry)
                 products.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("No products yet.", color = Color(0xFF6B7783))
                 }
@@ -415,6 +456,7 @@ private fun HomeScreenContent(
                                 title = p.title,
                                 seller = "",
                                 price = p.price,
+                                imageUrl = p.imageUrl,
                                 onOpen = { onOpenDetail(p.id) }
                             )
                         }
@@ -454,8 +496,11 @@ private fun ProductCardNew(
     title: String,
     seller: String,
     price: Double,
+    imageUrl: String?,
     onOpen: () -> Unit
 ) {
+    val ctx = LocalContext.current
+
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = Color.White,
@@ -469,7 +514,31 @@ private fun ProductCardNew(
                     .height(120.dp),
                 shape = RoundedCornerShape(12.dp),
                 color = Color(0xFF1F1F1F)
-            ) {}
+            ) {
+                if (!imageUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(ctx)
+                            .data(imageUrl)
+                            .allowHardware(false) // evita problemas con bitmaps firmados/grandes
+                            .listener(
+                                onError = { req, err ->
+                                    Log.e("Coil", "Load error for ${req.data}", err.throwable)
+                                },
+                                onSuccess = { req, res ->
+                                    Log.d(
+                                        "Coil",
+                                        "Loaded ${req.data} size=${res.drawable.intrinsicWidth}x${res.drawable.intrinsicHeight}"
+                                    )
+                                }
+                            )
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+
             Spacer(Modifier.height(10.dp))
             Text(title, color = GreenDark, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(seller, color = Color(0xFF9AA3AB), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)

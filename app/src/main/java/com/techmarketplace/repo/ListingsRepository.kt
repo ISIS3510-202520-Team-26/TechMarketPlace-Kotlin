@@ -1,3 +1,4 @@
+//app/src/main/java/com/techmarketplace/repo/ListingsRepository.kt
 package com.techmarketplace.repo
 
 import com.techmarketplace.net.api.ListingApi
@@ -76,6 +77,7 @@ class ListingsRepository(
             sellerId = sellerId
         )
     }
+
     suspend fun getListingDetail(id: String): ListingDetailDto =
         api.getListingDetail(id)
 
