@@ -12,6 +12,7 @@ import com.techmarketplace.net.ApiClient
 import com.techmarketplace.net.dto.CatalogItemDto
 import com.techmarketplace.repo.ListingImagesRepository
 import com.techmarketplace.repo.ListingsRepository
+import com.techmarketplace.repo.ImagesRepository
 import com.techmarketplace.storage.LocationStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,7 +32,7 @@ data class CatalogsState(
 class ListingsViewModel(
     app: Application,
     private val repo: ListingsRepository,
-    private val imagesRepo: ListingImagesRepository
+    private val imagesRepo: ImagesRepository
 ) : AndroidViewModel(app) {
 
     private val _catalogs = MutableStateFlow(CatalogsState())
@@ -70,7 +71,7 @@ class ListingsViewModel(
                     return@launch
                 }
 
-                val detail = repo.createListing(
+                repo.createListing(
                     title = title,
                     description = description,
                     categoryId = categoryId,
@@ -82,25 +83,23 @@ class ListingsViewModel(
                     // flags opcionales
                     priceSuggestionUsed = false,
                     quickViewEnabled = true
-                )
-
-                var previewUrl: String? = null
-                if (imageData != null) {
-                    try {
-                        previewUrl = imagesRepo.uploadListingPhoto(
-                            listingId = detail.id,
-                            filename = imageData.filename,
-                            contentType = imageData.contentType,
-                            bytes = imageData.bytes
-                        )
-                    } catch (uploadError: Exception) {
-                        val message = uploadError.message ?: "Failed to upload photo"
-                        onResult(true, "Listing created but photo upload failed: $message")
-                        return@launch
+                ).also { detail ->
+                    if (imageData != null) {
+                        try {
+                            imagesRepo.uploadListingPhoto(
+                                listingId = detail.id,
+                                filename = imageData.filename,
+                                contentType = imageData.contentType,
+                                bytes = imageData.bytes
+                            )
+                        } catch (uploadError: Exception) {
+                            val message = uploadError.message ?: "Failed to upload photo"
+                            onResult(true, "Listing created but photo upload failed: $message")
+                            return@launch
+                        }
                     }
                 }
-
-                onResult(true, previewUrl?.let { "Listing created!" })
+                onResult(true, null)
             } catch (e: HttpException) {
                 val body = e.response()?.errorBody()?.string()
                 onResult(false, "HTTP ${e.code()}${if (!body.isNullOrBlank()) " – $body" else ""}")
@@ -118,7 +117,7 @@ class ListingsViewModel(
                 val imagesApi = ApiClient.imagesApi()
                 val store = LocationStore(app)  // <- aquí inyectamos la ubicación guardada
                 val repository = ListingsRepository(api, store)
-                val imagesRepository = ListingImagesRepository(imagesApi)
+                val imagesRepository = ImagesRepository(imagesApi)
                 return ListingsViewModel(app, repository, imagesRepository) as T
             }
         }
