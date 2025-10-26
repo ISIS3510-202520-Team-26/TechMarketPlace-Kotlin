@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import com.techmarketplace.BuildConfig
 import com.techmarketplace.net.api.AuthApi
+import com.techmarketplace.net.api.ImagesApi
 import com.techmarketplace.net.api.ListingApi
 import com.techmarketplace.net.api.OrdersApi
 import com.techmarketplace.net.api.PaymentsApi
@@ -42,6 +43,7 @@ object ApiClient {
     }
 
     fun listingApi(): ListingApi = retrofit.create()
+    fun imagesApi(): ImagesApi = retrofit.create()
     fun authApi(): AuthApi = retrofit.create()
     fun telemetryApi(): TelemetryApi = retrofit.create()
     fun ordersApi(): OrdersApi = retrofit.create()
