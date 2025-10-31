@@ -9,8 +9,8 @@ import com.techmarketplace.net.api.ImagesApi
 import com.techmarketplace.net.api.ListingApi
 import com.techmarketplace.net.api.OrdersApi
 import com.techmarketplace.net.api.PaymentsApi
-import com.techmarketplace.net.api.TelemetryApi
 import com.techmarketplace.net.api.PriceSuggestionsApi
+import com.techmarketplace.net.api.TelemetryApi
 import com.techmarketplace.net.dto.RefreshRequest
 import com.techmarketplace.storage.TokenStore
 import kotlinx.coroutines.flow.firstOrNull
@@ -36,19 +36,16 @@ object ApiClient {
     private lateinit var okHttp: OkHttpClient
     private lateinit var retrofit: Retrofit
 
-    // Config de kotlinx-serialization (coincide con tus @Serializable)
     private val json = Json {
         ignoreUnknownKeys = true
         explicitNulls = false
         encodeDefaults = true
     }
 
-    // Factories de APIs (todas usan el mismo Retrofit con kotlinx-serialization)
     fun listingApi(): ListingApi = retrofit.create()
-    fun imagesApi(): ImagesApi = retrofit.create(ImagesApi::class.java)
+    fun imagesApi(): ImagesApi = retrofit.create()
     fun authApi(): AuthApi = retrofit.create()
     fun telemetryApi(): TelemetryApi = retrofit.create()
-
     fun ordersApi(): OrdersApi = retrofit.create()
     fun paymentsApi(): PaymentsApi = retrofit.create()
     fun priceSuggestionsApi(): PriceSuggestionsApi = retrofit.create()
@@ -63,16 +60,24 @@ object ApiClient {
             else HttpLoggingInterceptor.Level.NONE
         }
 
+        // Helper: sólo se omite el bearer en login/register/refresh (NO en /auth/me)
+        fun shouldSkipBearer(path: String): Boolean {
+            // funciona con o sin /v1 al inicio
+            return path.endsWith("auth/login") ||
+                    path.endsWith("auth/register") ||
+                    path.endsWith("auth/refresh")
+        }
+
         // Interceptor que agrega Accept y Authorization (cuando aplique)
         val authHeaderInterceptor = Interceptor { chain ->
             val original = chain.request()
             val path = original.url.encodedPath
-            val isAuthCall = path.contains("/auth/")
 
             val builder = original.newBuilder()
                 .header("Accept", "application/json")
 
-            if (!isAuthCall) {
+            val hasAuthHeader = original.header("Authorization") != null
+            if (!shouldSkipBearer(path) && !hasAuthHeader) {
                 val token = runBlocking { tokenStore.accessToken.firstOrNull() }
                 if (!token.isNullOrBlank()) {
                     builder.header("Authorization", "Bearer $token")
@@ -81,23 +86,25 @@ object ApiClient {
             chain.proceed(builder.build())
         }
 
-        // Authenticator para refrescar tokens en 401 (evita bucles y no refresca en /auth/*)
+        // Authenticator que refresca en 401 (tampoco se activa para login/register/refresh)
         val refreshAuthenticator = object : Authenticator {
             override fun authenticate(route: Route?, response: Response): Request? {
+                // evita bucles
                 if (responseCount(response) >= 2) return null
 
                 val path = response.request.url.encodedPath
-                if (path.contains("/auth/")) return null
+                if (shouldSkipBearer(path)) return null  // permite refrescar en /auth/me
 
                 val currentAccess = runBlocking { tokenStore.accessToken.firstOrNull() }
                 val requestAuth = response.request.header("Authorization")
+                // refresca sólo si el request fallido llevaba el access token actual
                 if (currentAccess.isNullOrBlank() || requestAuth == "Bearer $currentAccess") {
                     val refreshed = try {
                         val refresh = runBlocking { tokenStore.refreshToken.firstOrNull() } ?: return null
 
-                        // Retrofit "plano" y corto sólo para el refresh
+                        // Retrofit "plano" para /auth/refresh
                         val plainRetrofit = Retrofit.Builder()
-                            .baseUrl(BuildConfig.API_BASE_URL)
+                            .baseUrl(ensureSlash(BuildConfig.API_BASE_URL))
                             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
                             .client(
                                 OkHttpClient.Builder()
@@ -138,11 +145,9 @@ object ApiClient {
             }
         }
 
-        // Cliente "principal" para TODAS las APIs (incluida ImagesApi para presign/confirm)
-        // NOTA: El PUT a MinIO NO usa este cliente; lo hace ImagesRepository con un OkHttp plano.
         okHttp = OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)     // un poco más generoso que antes
-            .readTimeout(2, TimeUnit.MINUTES)         // confirma/presign pueden tardar más si el server está ocupado
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(2, TimeUnit.MINUTES)
             .writeTimeout(2, TimeUnit.MINUTES)
             .addInterceptor(authHeaderInterceptor)
             .addInterceptor(logging)
@@ -150,9 +155,12 @@ object ApiClient {
             .build()
 
         retrofit = Retrofit.Builder()
-            .baseUrl(BuildConfig.API_BASE_URL) // ej: http://10.0.2.2:8000/  (con /v1 si tu base lo incluye)
+            .baseUrl(ensureSlash(BuildConfig.API_BASE_URL)) // ej: http://10.0.2.2:8000/ o http://10.0.2.2:8000/v1/
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .client(okHttp)
             .build()
     }
+
+    private fun ensureSlash(base: String): String =
+        if (base.endsWith("/")) base else "$base/"
 }

@@ -1,7 +1,6 @@
 package com.techmarketplace.core
 
 import androidx.lifecycle.ViewModel
-import com.techmarketplace.feature.home.data.ProductRepository
 import com.techmarketplace.feature.home.model.Category
 import com.techmarketplace.feature.home.model.Product
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -10,16 +9,21 @@ import kotlinx.coroutines.flow.update
 
 class AppViewModel : ViewModel() {
 
-    private val _category = MutableStateFlow<Category?>(null) // null = todas
+    // null = todas las categorías
+    private val _category = MutableStateFlow<Category?>(null)
     val category: StateFlow<Category?> = _category
 
-    private val _products = MutableStateFlow(ProductRepository.demo)
+    // arranca vacío; lo llenarás desde red o donde corresponda
+    private val _products = MutableStateFlow<List<Product>>(emptyList())
     val products: StateFlow<List<Product>> = _products
 
     private val _cart = MutableStateFlow<Map<String, Int>>(emptyMap())
     val cart: StateFlow<Map<String, Int>> = _cart
 
     fun selectCategory(c: Category?) { _category.value = c }
+
+    // expón un setter para poblar productos desde donde quieras
+    fun setProducts(items: List<Product>) { _products.value = items }
 
     fun addToCart(p: Product) {
         _cart.update { cur -> cur + (p.id to ((cur[p.id] ?: 0) + 1)) }

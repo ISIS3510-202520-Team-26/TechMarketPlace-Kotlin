@@ -1,3 +1,4 @@
+// app/src/main/java/com/techmarketplace/storage/TokenStore.kt
 package com.techmarketplace.storage
 
 import android.content.Context
@@ -9,6 +10,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.runBlocking
 
 // Single DataStore instance bound to Context (recommended pattern).
 private val Context.authDataStore: DataStore<Preferences> by preferencesDataStore(
@@ -49,7 +51,10 @@ class TokenStore(context: Context) {
         }
     }
 
-    // One-shot getters (useful inside interceptors)
+    // One-shot getters (useful inside interceptors or init)
     suspend fun getAccessTokenOnce(): String? = accessToken.firstOrNull()
     suspend fun getRefreshTokenOnce(): String? = refreshToken.firstOrNull()
+
+    // Synchronous peek (evita usar SharedPreferences diferentes)
+    fun peekAccessToken(): String? = runBlocking { accessToken.firstOrNull() }
 }

@@ -19,8 +19,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.techmarketplace.net.ApiClient
 import com.techmarketplace.net.dto.ListingDetailDto
-import com.techmarketplace.net.dto.TelemetryBatchIn
-import com.techmarketplace.net.dto.TelemetryEventIn
+import com.techmarketplace.net.api.TelemetryBatch
+import com.techmarketplace.net.api.TelemetryEvent
+import java.time.Instant
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 
@@ -65,15 +66,17 @@ fun ProductDetailRoute(
             // Telemetry (no bloquea UI si falla)
             runCatching {
                 telemetry.ingest(
-                    TelemetryBatchIn(
+                    bearer = null, // o "Bearer $jwt" si tu endpoint lo exige
+                    body = TelemetryBatch(
                         events = listOf(
-                            TelemetryEventIn(
-                                eventType = "product.viewed",
-                                sessionId = "srv",
-                                userId = null,
-                                listingId = listingId,
+                            TelemetryEvent(
+                                event_type = "product.viewed",
+                                session_id = "srv",
+                                user_id = null,
+                                listing_id = listingId,
                                 step = null,
-                                properties = emptyMap()
+                                properties = emptyMap(),
+                                occurred_at = Instant.now().toString()
                             )
                         )
                     )

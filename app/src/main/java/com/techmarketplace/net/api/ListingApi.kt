@@ -19,6 +19,26 @@ interface ListingApi {
         @Query("category_id") categoryId: String? = null
     ): List<CatalogItemDto>
 
+    // ✅ Modelos correctos según tu backend
+    @Serializable
+    data class CreateCategoryIn(
+        val slug: String,
+        val name: String
+    )
+
+    @Serializable
+    data class CreateBrandIn(
+        val name: String,
+        val slug: String,
+        @SerialName("category_id") val categoryId: String
+    )
+
+    @POST("categories")
+    suspend fun createCategory(@Body body: CreateCategoryIn): CatalogItemDto
+
+    @POST("brands")
+    suspend fun createBrand(@Body body: CreateBrandIn): CatalogItemDto
+
     // ---- Listado / búsqueda ----
     @GET("listings")
     suspend fun searchListings(
@@ -38,29 +58,24 @@ interface ListingApi {
 
     // ---- Detalle ----
     @GET("listings/{id}")
-    suspend fun getListingDetail(
-        @Path("id") id: String
-    ): ListingDetailDto
+    suspend fun getListingDetail(@Path("id") id: String): ListingDetailDto
 
     // ---- Crear ----
     @POST("listings")
-    suspend fun createListing(
-        @Body body: CreateListingRequest
-    ): ListingDetailDto
+    suspend fun createListing(@Body body: CreateListingRequest): ListingDetailDto
 
     @POST("listings/{id}/image")
     suspend fun attachListingImage(
         @Path("id") id: String,
         @Body body: AttachListingImageIn
     ): AttachListingImageOut
+
+    @DELETE("listings/{id}")
+    suspend fun deleteListing(@Path("id") id: String)
 }
 
 @Serializable
-data class AttachListingImageIn(
-    val object_key: String
-)
+data class AttachListingImageIn(val object_key: String)
 
 @Serializable
-data class AttachListingImageOut(
-    @SerialName("preview_url") val previewUrl: String? = null
-)
+data class AttachListingImageOut(@SerialName("preview_url") val previewUrl: String? = null)
