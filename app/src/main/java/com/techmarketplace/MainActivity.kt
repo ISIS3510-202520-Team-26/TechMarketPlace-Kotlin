@@ -50,6 +50,8 @@ import com.techmarketplace.feature.profile.ProfileRoute
 import com.techmarketplace.feature.onboarding.WelcomeScreen
 import com.techmarketplace.net.ApiClient
 import com.techmarketplace.repo.AuthRepository
+import com.techmarketplace.telemetry.LoginTelemetry
+import com.techmarketplace.storage.TokenStore
 import com.techmarketplace.ui.auth.LoginViewModel
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
@@ -59,9 +61,16 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val tokenStore = TokenStore(applicationContext)
+
 
         // Init Retrofit/OkHttp + TokenStore
         ApiClient.init(applicationContext)
+        LoginTelemetry.init(
+            baseUrl = BuildConfig.API_BASE_URL, // termina en /v1/
+            tokenProvider = { tokenStore.getAccessTokenOnce() } // ← devuelve el access_token
+        )
+        LoginTelemetry.newSession() // opcional: nueva sesión al abrir app
 
         setContent {
             TMTheme {

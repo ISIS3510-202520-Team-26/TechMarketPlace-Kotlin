@@ -1,6 +1,9 @@
 
 import com.android.build.gradle.internal.cxx.configure.gradleLocalProperties
 
+
+
+
 fun String.escapeForBuildConfig(): String = replace("\"", "\\\"")
 
 val localProperties = gradleLocalProperties(rootDir, providers)
@@ -93,6 +96,9 @@ dependencies {
     implementation(libs.firebase.crashlytics.buildtools)
     implementation(libs.play.services.auth)
     implementation(libs.play.services.location)
+
+    implementation("com.squareup.retrofit2:converter-moshi:2.11.0")
+    implementation("com.squareup.moshi:moshi-kotlin:1.15.1")
 
     implementation(libs.coil.compose)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)

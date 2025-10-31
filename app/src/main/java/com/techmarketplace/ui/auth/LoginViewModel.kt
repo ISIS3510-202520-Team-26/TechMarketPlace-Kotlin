@@ -50,6 +50,8 @@ class LoginViewModel(private val app: Application) : ViewModel() {
             when (val res = repo.loginDetailed(email, password)) {
                 is AuthResult.Success -> {
                     _ui.update { it.copy(loading = false) }
+                    // ⚠️ Lanza telemetría fuera del viewModelScope (no se cancela al navegar)
+                    com.techmarketplace.telemetry.LoginTelemetry.fireLoginSuccess(email)
                     onFinished(true)
                 }
                 is AuthResult.Failure -> {
