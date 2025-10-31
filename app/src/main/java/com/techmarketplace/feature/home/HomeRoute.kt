@@ -41,12 +41,20 @@ import com.techmarketplace.storage.LocationStore
 import com.techmarketplace.storage.getAndSaveLocation
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
+import com.techmarketplace.telemetry.LoginTelemetry
+import com.techmarketplace.storage.CategoryClickStore
 
 private data class UiCategory(val id: String, val name: String)
+
 private data class UiProduct(
     val id: String,
     val title: String,
-    val price: Double,
+    val priceCents: Int,
+    val currency: String?,
+    val categoryId: String?,
+    val categoryName: String?,  // se rellenará con fallback al enviar telemetría
+    val brandId: String?,
+    val brandName: String?,
     val imageUrl: String?
 )
 
@@ -63,9 +71,13 @@ fun HomeRoute(
     val imagesApi: ImagesApi = remember { ApiClient.imagesApi() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val store = remember { LocationStore(context) }
+    val locationStore = remember { LocationStore(context) }
 
-    // Base pública del bucket (para fallback sin firma, NO para preview firmada)
+    // Ranking local de clicks por categoría
+    val clickStore = remember { CategoryClickStore(context) }
+    val topIds by clickStore.topIdsFlow.collectAsState(initial = emptyList())
+
+    // Base pública del bucket (fallback sin firma)
     val MINIO_PUBLIC_BASE = remember { "http://10.0.2.2:9000/market-images/" }
 
     fun emulatorize(url: String): String {
@@ -81,6 +93,20 @@ fun HomeRoute(
         return emulatorize(base + key)
     }
 
+    // === Helpers seguros para leer campos planos si existen ===
+    @Suppress("UNCHECKED_CAST")
+    fun <T> readFieldOrNull(any: Any, vararg names: String): T? {
+        for (n in names) {
+            val v = runCatching {
+                val f = any.javaClass.getDeclaredField(n)
+                f.isAccessible = true
+                f.get(any) as? T
+            }.getOrNull()
+            if (v != null) return v
+        }
+        return null
+    }
+
     // === Permisos & primer guardado ===
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -88,7 +114,7 @@ fun HomeRoute(
         val granted = (result[Manifest.permission.ACCESS_FINE_LOCATION] == true) ||
                 (result[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
         if (granted) {
-            scope.launch { getAndSaveLocation(context, store) }
+            scope.launch { getAndSaveLocation(context, locationStore) }
         }
     }
 
@@ -108,13 +134,13 @@ fun HomeRoute(
                 )
             )
         } else {
-            getAndSaveLocation(context, store)
+            getAndSaveLocation(context, locationStore)
         }
     }
 
     // Ubicación guardada para “cerca de mí”
-    val lat by store.lastLatitudeFlow.collectAsState(initial = null)
-    val lon by store.lastLongitudeFlow.collectAsState(initial = null)
+    val lat by locationStore.lastLatitudeFlow.collectAsState(initial = null)
+    val lon by locationStore.lastLongitudeFlow.collectAsState(initial = null)
 
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -153,38 +179,42 @@ fun HomeRoute(
             pageSize = 50
         )
 
-        // Para cada listing: usa image_url si viene; si no, firma con /images/preview
         return res.items.map { dto ->
             val firstPhoto = dto.photos.firstOrNull()
 
             val resolvedUrl: String? = when {
                 firstPhoto == null -> null
-
-                // Si el backend ya trae un URL; si está firmada (contiene X-Amz-), NO tocarla.
                 !firstPhoto.imageUrl.isNullOrBlank() -> {
                     val url = firstPhoto.imageUrl!!
-                    if (url.contains("X-Amz-")) url         // firmada → no tocar host
-                    else fixEmulatorHost(url)                // no firmada → puedes normalizar host
+                    if (url.contains("X-Amz-")) url else fixEmulatorHost(url)
                 }
-
-                // Si sólo trae storage_key → pedimos preview firmada y NO la tocamos.
                 !firstPhoto.storageKey.isNullOrBlank() -> {
                     try {
                         val preview = imagesApi.getPreview(firstPhoto.storageKey!!)
-                        preview.preview_url // pasar tal cual (firma depende del host)
+                        preview.preview_url
                     } catch (_: Exception) {
-                        // Fallback público: no firmado → aquí SÍ puedes emulatorizar
                         publicFromObjectKey(firstPhoto.storageKey!!)
                     }
                 }
-
                 else -> null
             }
+
+            // Lee campos planos si existen (evita referencias no resueltas)
+            val catId: String? = readFieldOrNull<String>(dto, "categoryId", "category_id")
+            val catName: String? = readFieldOrNull<String>(dto, "categoryName", "category_name")
+            val brId: String? = readFieldOrNull<String>(dto, "brandId", "brand_id")
+            val brName: String? = readFieldOrNull<String>(dto, "brandName", "brand_name")
+            val curr: String? = readFieldOrNull<String>(dto, "currency")
 
             UiProduct(
                 id = dto.id,
                 title = dto.title,
-                price = dto.priceCents.toDouble(),
+                priceCents = dto.priceCents,
+                currency = curr ?: "USD",
+                categoryId = catId,
+                categoryName = catName,
+                brandId = brId,
+                brandName = brName,
                 imageUrl = resolvedUrl
             )
         }
@@ -235,6 +265,20 @@ fun HomeRoute(
         }
     }
 
+    // Reordenar categorías según clicks (topIds)
+    fun orderCategories(input: List<UiCategory>, top: List<String>): List<UiCategory> {
+        if (input.isEmpty()) return input
+        val first = input.firstOrNull() // "All"
+        val rest = input.drop(1)
+        if (top.isEmpty()) return input
+        val index = top.withIndex().associate { it.value to it.index }
+        val prioritized = rest.sortedWith(
+            compareBy<UiCategory> { index[it.id] ?: Int.MAX_VALUE }
+                .thenBy { it.name.lowercase() }
+        )
+        return listOfNotNull(first) + prioritized
+    }
+
     // Triggers de recarga
     LaunchedEffect(Unit) {
         if (!didInitialFetch) {
@@ -252,6 +296,9 @@ fun HomeRoute(
     val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val bottomSpace = BottomBarHeight + navInset + 8.dp
 
+    // Categorías ordenadas por popularidad local
+    val orderedCategories = remember(categories, topIds) { orderCategories(categories, topIds) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -260,15 +307,43 @@ fun HomeRoute(
         HomeScreenContent(
             loading = loading,
             error = error,
-            categories = categories,
+            categories = orderedCategories,
             selectedCategoryId = selectedCat,
-            onSelectCategory = { id -> selectedCat = id.takeIf { it.isNotBlank() } },
+            onSelectCategory = { id ->
+                selectedCat = id.takeIf { it.isNotBlank() }
+                if (id.isNotBlank()) {
+                    scope.launch { clickStore.increment(id) }
+                    val name = orderedCategories.firstOrNull { it.id == id }?.name
+                    LoginTelemetry.fireCategoryClick(id, name ?: "—")
+                }
+            },
             query = query,
             onQueryChange = { query = it },
             products = products,
             onRetry = { fetchListings() },
             onAddProduct = onAddProduct,
-            onOpenDetail = onOpenDetail,
+            onOpenDetail = { listingId ->
+                val p = products.firstOrNull { it.id == listingId }
+                if (p != null) {
+                    // Fallback para nombre de categoría usando las categorías cargadas
+                    val catName = p.categoryName
+                        ?: orderedCategories.firstOrNull { it.id == p.categoryId }?.name
+
+                    scope.launch {
+                        LoginTelemetry.listingViewed(
+                            listingId = p.id,
+                            title = p.title,
+                            categoryId = p.categoryId,
+                            categoryName = catName,
+                            brandId = p.brandId,
+                            brandName = p.brandName,
+                            priceCents = p.priceCents,
+                            currency = p.currency
+                        )
+                    }
+                }
+                onOpenDetail(listingId)
+            },
             bottomSpace = bottomSpace,
             lat = lat,
             lon = lon,
@@ -454,8 +529,9 @@ private fun HomeScreenContent(
                         items(products, key = { it.id }) { p ->
                             ProductCardNew(
                                 title = p.title,
-                                seller = "",
-                                price = p.price,
+                                seller = p.brandName.orEmpty(),
+                                priceCents = p.priceCents,
+                                currency = p.currency,
                                 imageUrl = p.imageUrl,
                                 onOpen = { onOpenDetail(p.id) }
                             )
@@ -495,11 +571,13 @@ private fun RoundIcon(icon: ImageVector, onClick: () -> Unit) {
 private fun ProductCardNew(
     title: String,
     seller: String,
-    price: Double,
+    priceCents: Int,
+    currency: String?,
     imageUrl: String?,
     onOpen: () -> Unit
 ) {
     val ctx = LocalContext.current
+    val priceText = remember(priceCents, currency) { formatMoney(priceCents, currency) }
 
     Surface(
         shape = RoundedCornerShape(16.dp),
@@ -519,7 +597,7 @@ private fun ProductCardNew(
                     AsyncImage(
                         model = ImageRequest.Builder(ctx)
                             .data(imageUrl)
-                            .allowHardware(false) // evita problemas con bitmaps firmados/grandes
+                            .allowHardware(false)
                             .listener(
                                 onError = { req, err ->
                                     Log.e("Coil", "Load error for ${req.data}", err.throwable)
@@ -548,11 +626,23 @@ private fun ProductCardNew(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("$${price}", color = GreenDark, fontWeight = FontWeight.SemiBold)
+                Text(priceText, color = GreenDark, fontWeight = FontWeight.SemiBold)
                 Surface(shape = CircleShape, color = Color(0xFFF5F5F5), onClick = onOpen) {
                     Text("+", color = GreenDark, modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp))
                 }
             }
         }
     }
+}
+
+private fun formatMoney(priceCents: Int, currency: String?): String {
+    val symbol = when (currency?.uppercase()) {
+        "USD" -> "$"
+        "COP" -> "$"
+        "EUR" -> "€"
+        else -> "$"
+    }
+    val major = priceCents / 100
+    val minor = priceCents % 100
+    return if (minor == 0) "$symbol$major" else "$symbol${major}.${minor.toString().padStart(2, '0')}"
 }

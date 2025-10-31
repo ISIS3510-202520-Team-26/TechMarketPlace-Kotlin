@@ -46,7 +46,6 @@ import com.techmarketplace.feature.home.AddProductRoute
 import com.techmarketplace.feature.home.HomeRoute
 import com.techmarketplace.feature.order.OrderScreen
 import com.techmarketplace.feature.product.ProductDetailRoute
-import com.techmarketplace.feature.profile.ProfileRoute
 import com.techmarketplace.feature.onboarding.WelcomeScreen
 import com.techmarketplace.net.ApiClient
 import com.techmarketplace.repo.AuthRepository
@@ -57,6 +56,12 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import kotlinx.coroutines.launch
 
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import com.techmarketplace.feature.profile.ProfileRoute   // asegúrate de este import
+
+
+
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -66,9 +71,20 @@ class MainActivity : ComponentActivity() {
 
         // Init Retrofit/OkHttp + TokenStore
         ApiClient.init(applicationContext)
+        LoginTelemetry.setAppStart()
         LoginTelemetry.init(
-            baseUrl = BuildConfig.API_BASE_URL, // termina en /v1/
-            tokenProvider = { tokenStore.getAccessTokenOnce() } // ← devuelve el access_token
+            baseUrl = BuildConfig.API_BASE_URL,
+            tokenProvider = { tokenStore.getAccessTokenOnce() },
+            networkProvider = {
+                val cm = applicationContext.getSystemService<ConnectivityManager>()
+                val nc = cm?.getNetworkCapabilities(cm.activeNetwork)
+                when {
+                    nc == null -> "none"
+                    nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
+                    nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cell"
+                    else -> "other"
+                }
+            }
         )
         LoginTelemetry.newSession() // opcional: nueva sesión al abrir app
 
@@ -231,11 +247,15 @@ class MainActivity : ComponentActivity() {
                         // PROFILE — usa ProfileRoute
                         composable(BottomItem.Profile.route) {
                             ProfileRoute(
-                                onNavigateBottom = navigateBottom,
-                                onOpenListing = { id: String -> nav.navigate("listing/$id") },
+                                onNavigateBottom = { dest: BottomItem ->
+                                    navigateBottom(dest)
+                                },
+                                onOpenListing = { id: String ->
+                                    nav.navigate("listing/$id")
+                                },
                                 onSignOut = {
                                     scope.launch {
-                                        // Si AuthRepository.logout() existe, lo ejecutamos por reflexión.
+                                        // Si tienes un AuthRepository con logout(), ejecútalo aquí
                                         runCatching {
                                             val m = authRepo::class.java.methods
                                                 .firstOrNull { it.name == "logout" && it.parameterTypes.isEmpty() }

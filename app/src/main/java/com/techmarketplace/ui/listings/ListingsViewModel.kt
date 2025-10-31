@@ -14,6 +14,7 @@ import com.techmarketplace.net.dto.CatalogItemDto
 import com.techmarketplace.repo.ListingsRepository
 import com.techmarketplace.repo.ListingImagesRepository
 import com.techmarketplace.storage.LocationStore
+import com.techmarketplace.telemetry.LoginTelemetry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -88,12 +89,42 @@ class ListingsViewModel(
                     quickViewEnabled = true
                 )
 
-                // 3) si había imagen: presign -> PUT -> confirm -> preview (en repo)
+                // --- Valores "seguros" (no nulos) para telemetría ---
+                val safeTitle = detail.title ?: title
+                val safeCategoryId = detail.categoryId ?: categoryId
+                val safeBrandId = detail.brandId ?: brandId
+                val safePriceCents = detail.priceCents ?: priceCents
+                val safeCurrency = detail.currency ?: currency
+                val safeQuantity = detail.quantity ?: quantity
+                val safeCondition = detail.condition ?: condition
+
+                val catName = _catalogs.value.categories.firstOrNull { it.id == safeCategoryId }?.name
+                val brandName = safeBrandId?.let { id -> _catalogs.value.brands.firstOrNull { it.id == id }?.name }
+
+                // 2.1) Telemetría listing.created (no nulos donde tu API los exige)
+                runCatching {
+                    LoginTelemetry.fireListingCreated(
+                        listingId = detail.id,               // String (no nulo)
+                        title = safeTitle,                   // String
+                        categoryId = safeCategoryId,        // String
+                        categoryName = catName,             // String?
+                        brandId = safeBrandId,              // String?
+                        brandName = brandName,              // String?
+                        priceCents = safePriceCents,        // Int
+                        currency = safeCurrency,            // String?
+                        quantity = safeQuantity,            // Int
+                        condition = safeCondition           // String
+                    )
+                }.onFailure { t ->
+                    Log.w(TAG, "listing.created telemetry failed: ${t.message}")
+                }
+
+                // 3) subir imagen (si hay)
                 if (imageData != null) {
                     try {
                         val previewUrl = imagesRepo.uploadListingPhoto(
                             listingId = detail.id,
-                            fileName = imageData.filename,       // 👈 importante: filename real
+                            fileName = imageData.filename,
                             contentType = imageData.contentType,
                             bytes = imageData.bytes
                         )
