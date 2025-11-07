@@ -1,4 +1,4 @@
-package com.techmarketplace.data.repository
+package com.techmarketplace.feature.auth.data
 
 import android.content.Context
 import com.techmarketplace.core.errors.AuthError

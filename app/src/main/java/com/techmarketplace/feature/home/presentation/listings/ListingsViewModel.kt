@@ -1,4 +1,4 @@
-package com.techmarketplace.presentation.home.viewmodel
+package com.techmarketplace.feature.home.presentation.listings
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
@@ -8,7 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.techmarketplace.data.network.ApiClient
 import com.techmarketplace.data.network.dto.CatalogItemDto
 import com.techmarketplace.data.network.dto.SearchListingsResponse
-import com.techmarketplace.data.repository.ListingsRepository
+import com.techmarketplace.feature.home.data.ListingsRepository
 import com.techmarketplace.data.local.LocationStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

@@ -1,9 +1,9 @@
 package com.techmarketplace.core
 
 import androidx.lifecycle.ViewModel
-import com.techmarketplace.data.home.repository.ProductRepository
-import com.techmarketplace.domain.home.model.Category
-import com.techmarketplace.domain.home.model.Product
+import com.techmarketplace.feature.home.data.repository.ProductRepository
+import com.techmarketplace.feature.home.domain.model.Category
+import com.techmarketplace.feature.home.domain.model.Product
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update

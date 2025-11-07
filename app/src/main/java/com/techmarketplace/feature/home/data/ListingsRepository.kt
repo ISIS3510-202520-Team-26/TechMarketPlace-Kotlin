@@ -1,4 +1,4 @@
-package com.techmarketplace.data.repository
+package com.techmarketplace.feature.home.data
 
 import com.techmarketplace.data.network.api.ListingApi
 import com.techmarketplace.data.network.dto.CatalogItemDto

@@ -1,4 +1,4 @@
-package com.techmarketplace.presentation.home.view
+package com.techmarketplace.feature.home.presentation.listings
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background

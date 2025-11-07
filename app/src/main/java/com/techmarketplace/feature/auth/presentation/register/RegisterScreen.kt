@@ -1,4 +1,4 @@
-package com.techmarketplace.presentation.auth.view
+package com.techmarketplace.feature.auth.presentation.register
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.techmarketplace.R
 import com.techmarketplace.core.designsystem.GreenDark
-import com.techmarketplace.presentation.auth.model.AuthFieldLimits
+import com.techmarketplace.feature.auth.presentation.model.AuthFieldLimits
 
 @Composable
 fun RegisterScreen(
