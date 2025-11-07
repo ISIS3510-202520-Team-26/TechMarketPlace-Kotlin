@@ -8,6 +8,9 @@
         <!-- Physical device talking to your laptop/desktop over LAN -->
         <domain includeSubdomains="true">172.20.10.4</domain>
 
+        <!-- AWS backend -->
+        <domain includeSubdomains="true">3.19.208.242</domain>
+
         <!-- Emulator-only alias to host loopback (keep if you sometimes use the emulator) -->
 
         <!-- If you ever use “localhost” name via a proxy, leave this -->

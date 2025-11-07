@@ -4,7 +4,8 @@ import com.android.build.gradle.internal.cxx.configure.gradleLocalProperties
 fun String.escapeForBuildConfig(): String = replace("\"", "\\\"")
 
 val localProperties = gradleLocalProperties(rootDir, providers)
-val defaultApiBaseUrl = localProperties.getProperty("api.baseUrl") ?: "http://10.0.2.2:8000/v1/"
+// Fallback to the shared AWS backend when local.properties does not override it.
+val defaultApiBaseUrl = localProperties.getProperty("api.baseUrl") ?: "http://3.19.208.242:8000/v1/"
 val debugApiBaseUrl = localProperties.getProperty("api.baseUrl.debug") ?: defaultApiBaseUrl
 val releaseApiBaseUrl = localProperties.getProperty("api.baseUrl.release") ?: defaultApiBaseUrl
 
