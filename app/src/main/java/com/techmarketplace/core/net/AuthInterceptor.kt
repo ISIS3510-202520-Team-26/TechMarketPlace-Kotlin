@@ -1,6 +1,6 @@
 package com.techmarketplace.core.net
 
-import com.techmarketplace.storage.TokenStore
+import com.techmarketplace.data.storage.TokenStore
 import okhttp3.Interceptor
 import okhttp3.Response
 
