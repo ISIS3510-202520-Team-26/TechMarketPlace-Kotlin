@@ -1,4 +1,4 @@
-package com.techmarketplace.presentation.auth.model
+package com.techmarketplace.feature.auth.presentation.model
 
 import androidx.annotation.StringRes
 import com.techmarketplace.R

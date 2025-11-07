@@ -1,4 +1,4 @@
-package com.techmarketplace.presentation.home.view
+package com.techmarketplace.feature.home.presentation.listings
 
 import android.Manifest
 import android.content.pm.PackageManager

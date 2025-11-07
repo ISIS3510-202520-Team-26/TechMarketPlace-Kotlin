@@ -1,4 +1,4 @@
-package com.techmarketplace.presentation.auth.model
+package com.techmarketplace.feature.auth.presentation.model
 
 internal object AuthFieldLimits {
     const val MAX_NAME_LENGTH = 64

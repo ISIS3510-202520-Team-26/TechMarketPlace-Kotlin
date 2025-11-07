@@ -1,4 +1,4 @@
-package com.techmarketplace.presentation.auth.view
+package com.techmarketplace.feature.auth.presentation.login
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.imePadding

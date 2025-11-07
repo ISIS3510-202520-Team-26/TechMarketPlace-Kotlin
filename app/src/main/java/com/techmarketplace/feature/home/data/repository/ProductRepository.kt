@@ -1,6 +1,6 @@
-package com.techmarketplace.data.home.repository
+package com.techmarketplace.feature.home.data.repository
 
-import com.techmarketplace.domain.home.model.*
+import com.techmarketplace.feature.home.domain.model.*
 
 object ProductRepository {
     val demo = listOf(

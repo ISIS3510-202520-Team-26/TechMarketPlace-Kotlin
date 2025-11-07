@@ -1,4 +1,4 @@
-package com.techmarketplace.presentation.auth.viewmodel
+package com.techmarketplace.feature.auth.presentation.login
 
 import android.app.Application
 import androidx.lifecycle.ViewModel
@@ -8,8 +8,8 @@ import com.techmarketplace.R
 import com.techmarketplace.core.connectivity.ConnectivityObserver
 import com.techmarketplace.core.errors.AuthError
 import com.techmarketplace.core.errors.AuthResult
-import com.techmarketplace.data.repository.AuthRepository
-import com.techmarketplace.presentation.auth.model.AuthErrorMapper
+import com.techmarketplace.feature.auth.data.AuthRepository
+import com.techmarketplace.feature.auth.presentation.model.AuthErrorMapper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.launchIn

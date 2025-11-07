@@ -1,4 +1,4 @@
-package com.techmarketplace.presentation.home.view
+package com.techmarketplace.feature.home.presentation.add
 
 import android.app.Application
 import android.content.Context
@@ -41,7 +41,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.techmarketplace.data.network.dto.CatalogItemDto
 import com.techmarketplace.data.local.LocationStore
-import com.techmarketplace.presentation.home.viewmodel.ListingsViewModel
+import com.techmarketplace.feature.home.presentation.listings.ListingsViewModel
 import kotlin.math.roundToInt
 import java.io.File
 import kotlinx.coroutines.Dispatchers

@@ -7,8 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.techmarketplace.data.network.ApiClient
 import com.techmarketplace.data.network.dto.ListingSummaryDto
 import com.techmarketplace.data.network.dto.UserMe
-import com.techmarketplace.data.repository.AuthRepository
-import com.techmarketplace.data.repository.ListingsRepository
+import com.techmarketplace.feature.auth.data.AuthRepository
+import com.techmarketplace.feature.home.data.ListingsRepository
 import com.techmarketplace.data.local.LocationStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

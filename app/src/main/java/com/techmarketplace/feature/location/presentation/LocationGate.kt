@@ -1,4 +1,4 @@
-package com.techmarketplace.presentation.location.view
+package com.techmarketplace.feature.location.presentation
 
 import android.Manifest
 import android.annotation.SuppressLint

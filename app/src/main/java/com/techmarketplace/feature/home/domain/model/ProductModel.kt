@@ -1,4 +1,4 @@
-package com.techmarketplace.domain.home.model
+package com.techmarketplace.feature.home.domain.model
 
 data class Seller(
     val id: String,

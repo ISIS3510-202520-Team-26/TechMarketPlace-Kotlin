@@ -1,14 +1,13 @@
-package com.techmarketplace.presentation.auth.view
+package com.techmarketplace.feature.auth.presentation.register
 
 import android.app.Application
-import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.techmarketplace.presentation.auth.viewmodel.LoginViewModel
+import com.techmarketplace.feature.auth.presentation.login.LoginScreen
+import com.techmarketplace.feature.auth.presentation.login.LoginViewModel
 
 @Composable
 fun RegisterRoute(
