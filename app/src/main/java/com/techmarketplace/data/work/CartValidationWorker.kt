@@ -33,13 +33,17 @@ class CartValidationWorker(
 
         return runCatching {
             val response = remote.fetchCart()
-            val ttl = response.ttlMillis
-            if (ttl != null) {
-                local.updateTtl(ttl)
+            if (response.isMissing) {
+                local.clearLastSync()
+            } else {
+                val ttl = response.ttlMillis
+                if (ttl != null) {
+                    local.updateTtl(ttl)
+                }
+                val now = System.currentTimeMillis()
+                val entities = response.items.map { it.toEntity(now) }
+                local.replaceWithRemote(entities, ttl)
             }
-            val now = System.currentTimeMillis()
-            val entities = response.items.map { it.toEntity(now) }
-            local.replaceWithRemote(entities, ttl)
             Result.success()
         }.getOrElse {
             Result.retry()
