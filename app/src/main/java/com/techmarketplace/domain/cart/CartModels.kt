@@ -40,6 +40,7 @@ data class CartState(
 )
 
 data class CartItemUpdate(
+    val serverId: String? = null,
     val productId: String,
     val title: String,
     val priceCents: Int,

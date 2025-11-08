@@ -1,6 +1,7 @@
 package com.techmarketplace.data.repository.cart
 
 import com.techmarketplace.data.remote.api.CartRemoteItem
+import com.techmarketplace.data.storage.cart.CartLocalDataSource
 import com.techmarketplace.data.storage.dao.CartItemEntity
 import com.techmarketplace.domain.cart.CartItem
 import com.techmarketplace.domain.cart.CartItemUpdate
@@ -20,7 +21,7 @@ internal fun CartItemEntity.toDomain(): CartItem = CartItem(
 )
 
 internal fun CartItemEntity.toRemoteItem(): CartRemoteItem = CartRemoteItem(
-    cartItemId = cartItemId,
+    serverId = serverId,
     productId = productId,
     title = title,
     priceCents = priceCents,
@@ -31,7 +32,8 @@ internal fun CartItemEntity.toRemoteItem(): CartRemoteItem = CartRemoteItem(
 )
 
 internal fun CartRemoteItem.toEntity(now: Long): CartItemEntity = CartItemEntity(
-    cartItemId = cartItemId,
+    cartItemId = CartLocalDataSource.buildCartItemId(productId, variantDetails),
+    serverId = serverId,
     productId = productId,
     title = title,
     priceCents = priceCents,
@@ -46,6 +48,7 @@ internal fun CartRemoteItem.toEntity(now: Long): CartItemEntity = CartItemEntity
 )
 
 internal fun CartRemoteItem.toUpdate(): CartItemUpdate = CartItemUpdate(
+    serverId = serverId,
     productId = productId,
     title = title,
     priceCents = priceCents,

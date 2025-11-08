@@ -57,6 +57,7 @@ class CartLocalDataSource(
             val current = cartDao.getById(id)
             val ttl = ttlOverride ?: preferences.metadata.first().ttlMillis
             val expiresAt = ttl.takeIf { it > 0L }?.let { now + it }
+            val serverId = update.serverId ?: current?.serverId
             val pendingOp = when {
                 clearPending -> null
                 markPending != null -> markPending
@@ -70,6 +71,7 @@ class CartLocalDataSource(
             }
             val entity = CartItemEntity(
                 cartItemId = id,
+                serverId = serverId,
                 productId = update.productId,
                 title = update.title,
                 priceCents = update.priceCents,

@@ -2,9 +2,10 @@ package com.techmarketplace.data.remote.api
 
 import com.techmarketplace.domain.cart.CartVariantDetail
 import java.util.concurrent.TimeUnit
+import retrofit2.HttpException
 
 data class CartRemoteItem(
-    val cartItemId: String,
+    val serverId: String?,
     val productId: String,
     val title: String,
     val priceCents: Int,
@@ -36,7 +37,15 @@ class NoOpCartRemoteDataSource : CartRemoteDataSource {
 
 class RetrofitCartRemoteDataSource(private val api: CartApi) : CartRemoteDataSource {
     override suspend fun fetchCart(): CartFetchResult {
-        val response = api.getCart()
+        val response = try {
+            api.getCart()
+        } catch (error: HttpException) {
+            if (error.code() == 404) {
+                return CartFetchResult(emptyList())
+            } else {
+                throw error
+            }
+        }
         val items = response.items.map { it.toRemoteItem() }
         val ttlMillis = response.ttlSeconds
             ?.takeIf { it > 0 }
@@ -50,7 +59,7 @@ class RetrofitCartRemoteDataSource(private val api: CartApi) : CartRemoteDataSou
 
     override suspend fun upsertItem(item: CartRemoteItem): CartRemoteItem {
         val request = UpsertCartItemIn(
-            cartItemId = item.cartItemId,
+            cartItemId = item.serverId,
             productId = item.productId,
             quantity = item.quantity,
             variantDetails = item.variantDetails.map { it.toDto() }
@@ -60,12 +69,16 @@ class RetrofitCartRemoteDataSource(private val api: CartApi) : CartRemoteDataSou
     }
 
     override suspend fun removeItem(cartItemId: String) {
-        api.deleteItem(cartItemId)
+        try {
+            api.deleteItem(cartItemId)
+        } catch (error: HttpException) {
+            if (error.code() != 404) throw error
+        }
     }
 }
 
 private fun CartItemDto.toRemoteItem(): CartRemoteItem = CartRemoteItem(
-    cartItemId = cartItemId,
+    serverId = cartItemId,
     productId = productId,
     title = title,
     priceCents = priceCents,

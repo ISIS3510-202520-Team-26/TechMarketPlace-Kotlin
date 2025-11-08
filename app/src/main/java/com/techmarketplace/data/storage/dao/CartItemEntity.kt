@@ -8,6 +8,7 @@ import com.techmarketplace.domain.cart.CartVariantDetail
 @Entity(tableName = "cart_items")
 data class CartItemEntity(
     @PrimaryKey val cartItemId: String,
+    val serverId: String? = null,
     val productId: String,
     val title: String,
     val priceCents: Int,

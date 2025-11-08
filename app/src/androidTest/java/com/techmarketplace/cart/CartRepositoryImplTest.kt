@@ -148,14 +148,16 @@ class CartRepositoryImplTest {
         override suspend fun fetchCart(): CartFetchResult = CartFetchResult(upserted.toList())
 
         override suspend fun upsertItem(item: CartRemoteItem): CartRemoteItem {
-            upserted.removeAll { it.cartItemId == item.cartItemId }
-            upserted.add(item)
-            return item
+            val serverId = item.serverId ?: "remote-${item.productId}"
+            val stored = item.copy(serverId = serverId)
+            upserted.removeAll { it.serverId == stored.serverId }
+            upserted.add(stored)
+            return stored
         }
 
         override suspend fun removeItem(cartItemId: String) {
             removed.add(cartItemId)
-            upserted.removeAll { it.cartItemId == cartItemId }
+            upserted.removeAll { it.serverId == cartItemId }
         }
     }
 }

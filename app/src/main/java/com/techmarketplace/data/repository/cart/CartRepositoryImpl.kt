@@ -145,8 +145,16 @@ class CartRepositoryImpl(
             pendingQuantity = existing.quantity
         )
 
+        val remoteId = pendingEntity.serverId
+        if (remoteId.isNullOrBlank()) {
+            local.markSynced(pendingEntity)
+            local.updateLastSync()
+            clearError()
+            return
+        }
+
         runCatching {
-            withContext(dispatcher) { remote.removeItem(itemId) }
+            withContext(dispatcher) { remote.removeItem(remoteId) }
             local.markSynced(pendingEntity)
             local.updateLastSync()
             clearError()
@@ -170,7 +178,10 @@ class CartRepositoryImpl(
                 try {
                     when (entity.pendingOperation) {
                         CartSyncOperation.REMOVE -> {
-                            remote.removeItem(entity.cartItemId)
+                            val serverId = entity.serverId
+                            if (!serverId.isNullOrBlank()) {
+                                remote.removeItem(serverId)
+                            }
                             local.markSynced(entity)
                         }
                         CartSyncOperation.ADD, CartSyncOperation.UPDATE -> {
