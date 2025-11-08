@@ -56,6 +56,7 @@ import com.techmarketplace.presentation.onboarding.view.WelcomeScreen
 import com.techmarketplace.presentation.orders.view.OrderScreen
 import com.techmarketplace.presentation.product.view.ProductDetailRoute
 import com.techmarketplace.presentation.profile.view.ProfileRoute
+import com.techmarketplace.presentation.telemetry.view.TelemetryRoute
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import kotlinx.coroutines.launch
@@ -263,7 +264,21 @@ class MainActivity : ComponentActivity() {
                                             launchSingleTop = true
                                         }
                                     }
+                                },
+                                onOpenTelemetry = { sellerId: String ->
+                                    nav.navigate("telemetry/$sellerId") {
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
                                 }
+                            )
+                        }
+
+                        composable("telemetry/{sellerId}") { backStackEntry ->
+                            val sellerId = backStackEntry.arguments?.getString("sellerId") ?: return@composable
+                            TelemetryRoute(
+                                sellerId = sellerId,
+                                onBack = { nav.popBackStack() }
                             )
                         }
                     }
