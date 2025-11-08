@@ -7,6 +7,7 @@ import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.PUT
 
 interface CartApi {
     @GET("cart/items")
@@ -17,6 +18,9 @@ interface CartApi {
 
     @DELETE("cart/items/{cart_item_id}")
     suspend fun deleteItem(@Path("cart_item_id") cartItemId: String)
+
+    @PUT("cart")
+    suspend fun replaceCart(@Body body: ReplaceCartIn): CartResponse
 }
 
 @Serializable
@@ -46,6 +50,19 @@ data class CartVariantDetailDto(
 
 @Serializable
 data class UpsertCartItemIn(
+    @SerialName("cart_item_id") val cartItemId: String? = null,
+    @SerialName("product_id") val productId: String,
+    val quantity: Int,
+    @SerialName("variant_details") val variantDetails: List<CartVariantDetailDto> = emptyList()
+)
+
+@Serializable
+data class ReplaceCartIn(
+    val items: List<ReplaceCartItemIn> = emptyList()
+)
+
+@Serializable
+data class ReplaceCartItemIn(
     @SerialName("cart_item_id") val cartItemId: String? = null,
     @SerialName("product_id") val productId: String,
     val quantity: Int,
