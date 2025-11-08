@@ -18,7 +18,8 @@ data class CartRemoteItem(
 data class CartFetchResult(
     val items: List<CartRemoteItem>,
     val ttlMillis: Long? = null,
-    val lastSyncEpochMillis: Long? = null
+    val lastSyncEpochMillis: Long? = null,
+    val isMissing: Boolean = false
 )
 
 interface CartRemoteDataSource {
@@ -41,7 +42,7 @@ class RetrofitCartRemoteDataSource(private val api: CartApi) : CartRemoteDataSou
             api.getCart()
         } catch (error: HttpException) {
             if (error.code() == 404) {
-                return CartFetchResult(emptyList())
+                return CartFetchResult(emptyList(), isMissing = true)
             } else {
                 throw error
             }

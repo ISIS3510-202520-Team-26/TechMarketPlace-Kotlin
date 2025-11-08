@@ -184,6 +184,10 @@ class CartLocalDataSource(
 
     suspend fun evictExpired(): Int = withContext(dispatcher) { evictExpiredInternal() }
 
+    suspend fun clearLastSync() = withContext(dispatcher) {
+        preferences.clearLastSync()
+    }
+
     suspend fun updateLastSync() = withContext(dispatcher) {
         preferences.updateLastSync(nowProvider())
     }
