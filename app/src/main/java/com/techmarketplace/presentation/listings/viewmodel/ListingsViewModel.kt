@@ -13,6 +13,7 @@ import com.techmarketplace.data.remote.ApiClient
 import com.techmarketplace.data.remote.dto.CatalogItemDto
 import com.techmarketplace.data.repository.ListingsRepository
 import com.techmarketplace.data.repository.ListingImagesRepository
+import com.techmarketplace.data.storage.HomeFeedCacheStore
 import com.techmarketplace.data.storage.LocationStore
 import com.techmarketplace.data.telemetry.LoginTelemetry
 import kotlinx.coroutines.Dispatchers
@@ -154,7 +155,11 @@ class ListingsViewModel(
                 val api = ApiClient.listingApi()
                 val imagesApi = ApiClient.imagesApi()
                 val store = LocationStore(app)
-                val repository = ListingsRepository(api, store)
+                val repository = ListingsRepository(
+                    api = api,
+                    locationStore = store,
+                    homeFeedCacheStore = HomeFeedCacheStore(app)
+                )
                 val imagesRepository = ListingImagesRepository(imagesApi)
                 return ListingsViewModel(app, repository, imagesRepository) as T
             }

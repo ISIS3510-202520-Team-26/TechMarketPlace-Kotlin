@@ -260,8 +260,9 @@ class CartRepositoryImpl(
             clearError()
             return MissingCartResolution.Handled
         }
+        val latest = local.getItem(entity.cartItemId) ?: entity
         return runCatching {
-            withContext(dispatcher) { remote.upsertItem(entity.toRemoteItem()) }
+            withContext(dispatcher) { remote.upsertItem(latest.toRemoteItem()) }
         }.fold(
             onSuccess = { response ->
                 local.upsert(response.toUpdate(), clearPending = true)
@@ -283,7 +284,7 @@ class CartRepositoryImpl(
         }
         return runCatching {
             withContext(dispatcher) {
-                remote.replaceAll(active.map { it.toRemoteItem() })
+                remote.replaceAll(active.map { it.copy(serverId = null).toRemoteItem() })
             }
         }.fold(
             onSuccess = { result ->
