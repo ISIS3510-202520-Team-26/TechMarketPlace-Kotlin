@@ -18,8 +18,11 @@ data class CartRemoteItem(
 data class CartFetchResult(
     val items: List<CartRemoteItem>,
     val ttlMillis: Long? = null,
-    val lastSyncEpochMillis: Long? = null
+    val lastSyncEpochMillis: Long? = null,
+    val isMissing: Boolean = false
 )
+
+class MissingRemoteCartException(cause: Throwable? = null) : Exception("Remote cart not found", cause)
 
 interface CartRemoteDataSource {
     suspend fun fetchCart(): CartFetchResult
@@ -41,7 +44,7 @@ class RetrofitCartRemoteDataSource(private val api: CartApi) : CartRemoteDataSou
             api.getCart()
         } catch (error: HttpException) {
             if (error.code() == 404) {
-                return CartFetchResult(emptyList())
+                return CartFetchResult(emptyList(), isMissing = true)
             } else {
                 throw error
             }
@@ -64,7 +67,15 @@ class RetrofitCartRemoteDataSource(private val api: CartApi) : CartRemoteDataSou
             quantity = item.quantity,
             variantDetails = item.variantDetails.map { it.toDto() }
         )
-        val response = api.upsertItem(request)
+        val response = try {
+            api.upsertItem(request)
+        } catch (error: HttpException) {
+            if (error.code() == 404) {
+                throw MissingRemoteCartException(error)
+            } else {
+                throw error
+            }
+        }
         return response.toRemoteItem()
     }
 
