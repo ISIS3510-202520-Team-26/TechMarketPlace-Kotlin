@@ -13,6 +13,8 @@ coroutines = "1.8.1"
 coil = "2.6.0"
 lifecycle = "2.8.6"
 material = "1.13.0"
+room = "2.6.1"
+compose-ui-test = "1.7.3"
 
 # ÚNICAS versiones para Firebase y Play Services (sin duplicados)
 firebase-bom = "33.3.0"
@@ -73,3 +75,9 @@ coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coil" }
 androidx-lifecycle-viewmodel-ktx = { module = "androidx.lifecycle:lifecycle-viewmodel-ktx", version.ref = "lifecycle" }
 material = { module = "com.google.android.material:material", version.ref = "material" }
 androidx-compose-runtime-saveable = { module = "androidx.compose.runtime:runtime-saveable" }
+androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
+androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+androidx-compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4", version.ref = "compose-ui-test" }
+androidx-compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest", version.ref = "compose-ui-test" }

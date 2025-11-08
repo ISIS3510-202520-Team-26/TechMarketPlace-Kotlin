@@ -1,8 +1,11 @@
 package com.techmarketplace.data.remote.api
 
+import com.techmarketplace.data.remote.dto.SellerResponseMetricsDto
 import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
+import retrofit2.http.Path
 
 data class TelemetryEvent(
     val event_type: String,
@@ -24,4 +27,9 @@ interface TelemetryApi {
         @Header("Authorization") bearer: String?, // null si no lo pides
         @Body body: TelemetryBatch
     )
+
+    @GET("telemetry/sellers/{sellerId}/response-metrics")
+    suspend fun getSellerResponseMetrics(
+        @Path("sellerId") sellerId: String
+    ): SellerResponseMetricsDto
 }
