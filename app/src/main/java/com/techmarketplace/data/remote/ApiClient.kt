@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import com.techmarketplace.BuildConfig
 import com.techmarketplace.data.remote.api.AuthApi
+import com.techmarketplace.data.remote.api.CartApi
 import com.techmarketplace.data.remote.api.ImagesApi
 import com.techmarketplace.data.remote.api.ListingApi
 import com.techmarketplace.data.remote.api.OrdersApi
@@ -23,6 +24,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.Route
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
@@ -49,6 +51,7 @@ object ApiClient {
     fun ordersApi(): OrdersApi = retrofit.create()
     fun paymentsApi(): PaymentsApi = retrofit.create()
     fun priceSuggestionsApi(): PriceSuggestionsApi = retrofit.create()
+    fun cartApi(): CartApi = retrofit.create()
 
     /** Llamar una vez desde Application o Activity: ApiClient.init(applicationContext) */
     fun init(appContext: Context) {
@@ -104,7 +107,7 @@ object ApiClient {
 
                         // Retrofit "plano" para /auth/refresh
                         val plainRetrofit = Retrofit.Builder()
-                            .baseUrl(ensureSlash(BuildConfig.API_BASE_URL))
+                            .baseUrl(normalizeBaseUrl(BuildConfig.API_BASE_URL))
                             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
                             .client(
                                 OkHttpClient.Builder()
@@ -154,8 +157,10 @@ object ApiClient {
             .authenticator(refreshAuthenticator)
             .build()
 
+        val normalizedBaseUrl = normalizeBaseUrl(BuildConfig.API_BASE_URL)
+
         retrofit = Retrofit.Builder()
-            .baseUrl(ensureSlash(BuildConfig.API_BASE_URL)) // ej: http://10.0.2.2:8000/ o http://10.0.2.2:8000/v1/
+            .baseUrl(normalizedBaseUrl) // ej: http://10.0.2.2:8000/v1/
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .client(okHttp)
             .build()
@@ -163,4 +168,22 @@ object ApiClient {
 
     private fun ensureSlash(base: String): String =
         if (base.endsWith("/")) base else "$base/"
+
+    private fun normalizeBaseUrl(rawBase: String): String {
+        val base = rawBase.ifBlank { DEFAULT_BASE }
+        val trimmed = base.trim()
+        val httpUrl = trimmed.toHttpUrlOrNull()
+        val withVersion = if (httpUrl != null) {
+            val segments = httpUrl.pathSegments.filter { it.isNotEmpty() }
+            val hasVersionSegment = segments.lastOrNull()?.matches(VERSION_SEGMENT_REGEX) == true
+            if (hasVersionSegment) trimmed else trimmed.trimEnd('/') + "/v1"
+        } else {
+            trimmed
+        }
+        return ensureSlash(withVersion)
+    }
+
+    private val VERSION_SEGMENT_REGEX = Regex("v\\d+", RegexOption.IGNORE_CASE)
+
+    private const val DEFAULT_BASE = "http://10.0.2.2:8000/v1/"
 }
