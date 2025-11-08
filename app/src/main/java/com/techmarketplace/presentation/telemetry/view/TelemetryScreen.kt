@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -76,6 +77,7 @@ fun TelemetryRoute(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TelemetryScreen(
     state: TelemetryUiState,
@@ -144,6 +146,9 @@ private fun TelemetryContent(
         SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(date)
     }
 
+    val responseRateProgress = metrics.responseRatePercent / 100f
+    val responseTimeProgress = (1f - (metrics.averageResponseMinutes.toFloat() / 60f)).coerceIn(0f, 1f)
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -161,13 +166,13 @@ private fun TelemetryContent(
                     SummaryRow(
                         label = "Tasa de respuesta",
                         value = numberFormat.format(metrics.responseRatePercent / 100.0),
-                        progress = metrics.responseRatePercent / 100f
+                        progress = responseRateProgress
                     )
                     Spacer(Modifier.height(12.dp))
                     SummaryRow(
                         label = "Tiempo promedio",
                         value = String.format(Locale.getDefault(), "%.1f min", metrics.averageResponseMinutes),
-                        progress = (1f - (metrics.averageResponseMinutes / 60f)).coerceIn(0f, 1f)
+                        progress = responseTimeProgress
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(
@@ -229,7 +234,10 @@ private fun RankingChart(
     ranking: List<SellerRankingRowUi>
 ) {
     val maxValue = ranking.maxOfOrNull { it.responseRatePercent }?.coerceAtLeast(1) ?: 1
-    val barHeight = remember { 180.dp }
+    val maxValueFloat = maxValue.toFloat()
+    val barHeight = 180.dp
+    val highlightColor = GreenDark
+    val barColor = MaterialTheme.colorScheme.primary
     Surface(
         modifier = Modifier.fillMaxWidth(),
         tonalElevation = 2.dp,
@@ -245,9 +253,10 @@ private fun RankingChart(
             ) {
                 val barWidth = size.width / (ranking.size * 2f)
                 ranking.forEachIndexed { index, entry ->
-                    val barLeft = (index * 2 + 0.5f) * barWidth
-                    val barTop = size.height - (entry.responseRatePercent / maxValue.toFloat()) * size.height
-                    val color = if (index == 0) GreenDark else MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                    val normalizedValue = entry.responseRatePercent.toFloat() / maxValueFloat
+                    val barLeft = ((index * 2) + 0.5f) * barWidth
+                    val barTop = size.height * (1f - normalizedValue)
+                    val color = if (index == 0) highlightColor else barColor.copy(alpha = 0.6f)
                     drawRect(
                         color = color,
                         topLeft = Offset(barLeft, barTop),
