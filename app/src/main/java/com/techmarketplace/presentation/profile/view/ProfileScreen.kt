@@ -43,7 +43,8 @@ import retrofit2.HttpException
 fun ProfileScreen(
     onNavigateBottom: (BottomItem) -> Unit,
     onOpenListing: (String) -> Unit,
-    onSignOut: () -> Unit
+    onSignOut: () -> Unit,
+    onOpenTelemetry: (String) -> Unit
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -281,6 +282,15 @@ fun ProfileScreen(
                                 Spacer(Modifier.width(8.dp))
                             }
                             Text("Actualizar")
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                userId?.let(onOpenTelemetry)
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(28.dp)
+                        ) {
+                            Text("Ver métricas")
                         }
                         Button(
                             onClick = onSignOut,

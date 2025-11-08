@@ -8,11 +8,13 @@ import com.techmarketplace.core.ui.BottomItem
 fun ProfileRoute(
     onNavigateBottom: (BottomItem) -> Unit,
     onOpenListing: (String) -> Unit,
-    onSignOut: () -> Unit
+    onSignOut: () -> Unit,
+    onOpenTelemetry: (String) -> Unit
 ) {
     ProfileScreen(
         onNavigateBottom = onNavigateBottom,
         onOpenListing = onOpenListing,
-        onSignOut = onSignOut
+        onSignOut = onSignOut,
+        onOpenTelemetry = onOpenTelemetry
     )
 }
