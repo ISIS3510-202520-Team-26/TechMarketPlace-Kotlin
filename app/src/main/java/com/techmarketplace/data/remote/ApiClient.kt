@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import com.techmarketplace.BuildConfig
 import com.techmarketplace.data.remote.api.AuthApi
+import com.techmarketplace.data.remote.api.CartApi
 import com.techmarketplace.data.remote.api.ImagesApi
 import com.techmarketplace.data.remote.api.ListingApi
 import com.techmarketplace.data.remote.api.OrdersApi
@@ -49,6 +50,7 @@ object ApiClient {
     fun ordersApi(): OrdersApi = retrofit.create()
     fun paymentsApi(): PaymentsApi = retrofit.create()
     fun priceSuggestionsApi(): PriceSuggestionsApi = retrofit.create()
+    fun cartApi(): CartApi = retrofit.create()
 
     /** Llamar una vez desde Application o Activity: ApiClient.init(applicationContext) */
     fun init(appContext: Context) {
