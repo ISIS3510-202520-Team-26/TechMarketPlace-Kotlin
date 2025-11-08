@@ -10,7 +10,7 @@ import retrofit2.http.Path
 import retrofit2.http.PUT
 
 interface CartApi {
-    @GET("cart")
+    @GET("cart/items")
     suspend fun getCart(): CartResponse
 
     @POST("cart/items")
