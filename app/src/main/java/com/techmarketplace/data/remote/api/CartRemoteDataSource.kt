@@ -1,0 +1,80 @@
+package com.techmarketplace.data.remote.api
+
+import com.techmarketplace.domain.cart.CartVariantDetail
+import java.util.concurrent.TimeUnit
+
+data class CartRemoteItem(
+    val cartItemId: String,
+    val productId: String,
+    val title: String,
+    val priceCents: Int,
+    val currency: String,
+    val quantity: Int,
+    val variantDetails: List<CartVariantDetail> = emptyList(),
+    val thumbnailUrl: String? = null
+)
+
+data class CartFetchResult(
+    val items: List<CartRemoteItem>,
+    val ttlMillis: Long? = null,
+    val lastSyncEpochMillis: Long? = null
+)
+
+interface CartRemoteDataSource {
+    suspend fun fetchCart(): CartFetchResult
+    suspend fun upsertItem(item: CartRemoteItem): CartRemoteItem
+    suspend fun removeItem(cartItemId: String)
+}
+
+class NoOpCartRemoteDataSource : CartRemoteDataSource {
+    override suspend fun fetchCart(): CartFetchResult = CartFetchResult(emptyList())
+
+    override suspend fun upsertItem(item: CartRemoteItem): CartRemoteItem = item
+
+    override suspend fun removeItem(cartItemId: String) {}
+}
+
+class RetrofitCartRemoteDataSource(private val api: CartApi) : CartRemoteDataSource {
+    override suspend fun fetchCart(): CartFetchResult {
+        val response = api.getCart()
+        val items = response.items.map { it.toRemoteItem() }
+        val ttlMillis = response.ttlSeconds
+            ?.takeIf { it > 0 }
+            ?.let(TimeUnit.SECONDS::toMillis)
+        return CartFetchResult(
+            items = items,
+            ttlMillis = ttlMillis,
+            lastSyncEpochMillis = response.lastSyncEpochMillis
+        )
+    }
+
+    override suspend fun upsertItem(item: CartRemoteItem): CartRemoteItem {
+        val request = UpsertCartItemIn(
+            cartItemId = item.cartItemId,
+            productId = item.productId,
+            quantity = item.quantity,
+            variantDetails = item.variantDetails.map { it.toDto() }
+        )
+        val response = api.upsertItem(request)
+        return response.toRemoteItem()
+    }
+
+    override suspend fun removeItem(cartItemId: String) {
+        api.deleteItem(cartItemId)
+    }
+}
+
+private fun CartItemDto.toRemoteItem(): CartRemoteItem = CartRemoteItem(
+    cartItemId = cartItemId,
+    productId = productId,
+    title = title,
+    priceCents = priceCents,
+    currency = currency,
+    quantity = quantity,
+    variantDetails = variantDetails.map { it.toDomain() },
+    thumbnailUrl = thumbnailUrl
+)
+
+private fun CartVariantDetailDto.toDomain(): CartVariantDetail = CartVariantDetail(name, value)
+
+private fun CartVariantDetail.toDto(): CartVariantDetailDto = CartVariantDetailDto(name, value)

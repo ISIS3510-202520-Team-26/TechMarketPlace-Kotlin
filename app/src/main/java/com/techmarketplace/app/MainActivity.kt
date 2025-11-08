@@ -50,6 +50,7 @@ import com.techmarketplace.presentation.auth.view.LoginScreen
 import com.techmarketplace.presentation.auth.view.RegisterScreen
 import com.techmarketplace.presentation.auth.viewmodel.LoginViewModel
 import com.techmarketplace.presentation.cart.view.MyCartScreen
+import com.techmarketplace.presentation.cart.viewmodel.CartViewModel
 import com.techmarketplace.presentation.home.view.AddProductRoute
 import com.techmarketplace.presentation.home.view.HomeRoute
 import com.techmarketplace.presentation.onboarding.view.WelcomeScreen
@@ -141,6 +142,8 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    val cartViewModel: CartViewModel = viewModel(factory = CartViewModel.factory(app))
+
                     NavHost(navController = nav, startDestination = "login") {
 
                         composable("welcome") {
@@ -156,6 +159,7 @@ class MainActivity : ComponentActivity() {
                                     authVM.login(email, pass) { ok: Boolean ->
                                         if (ok) {
                                             Toast.makeText(context, "Welcome!", Toast.LENGTH_SHORT).show()
+                                            cartViewModel.onLogin()
                                             // 👉 Ir DIRECTO al Home (sin LocationGate)
                                             nav.navigate(BottomItem.Home.route) {
                                                 popUpTo("login") { inclusive = true }
@@ -182,6 +186,7 @@ class MainActivity : ComponentActivity() {
                                     authVM.register(name, email, pass, campus) { ok: Boolean ->
                                         if (ok) {
                                             Toast.makeText(context, "Account created!", Toast.LENGTH_SHORT).show()
+                                            cartViewModel.onLogin()
                                             // 👉 También directo al Home
                                             nav.navigate(BottomItem.Home.route) {
                                                 popUpTo("login") { inclusive = true }
@@ -218,6 +223,7 @@ class MainActivity : ComponentActivity() {
                             val id = backStackEntry.arguments?.getString("id") ?: return@composable
                             ProductDetailRoute(
                                 listingId = id,
+                                cartViewModel = cartViewModel,
                                 onBack = { nav.popBackStack() }
                             )
                         }
@@ -238,6 +244,7 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(BottomItem.Cart.route) {
                             MyCartScreen(
+                                viewModel = cartViewModel,
                                 onNavigateBottom = { navigateBottom(BottomItem.Home) }
                             )
                         }
