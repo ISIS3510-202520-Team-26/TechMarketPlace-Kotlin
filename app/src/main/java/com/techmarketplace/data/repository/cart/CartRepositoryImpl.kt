@@ -1,16 +1,18 @@
 package com.techmarketplace.data.repository.cart
 
+<<<<<<< HEAD
+import com.techmarketplace.data.storage.cart.CartLocalDataSource
+=======
 import com.techmarketplace.data.remote.api.CartRemoteDataSource
 import com.techmarketplace.data.remote.api.MissingRemoteCartException
 import com.techmarketplace.data.storage.cart.CartLocalDataSource
 import com.techmarketplace.data.storage.cart.CartViewport
 import com.techmarketplace.data.storage.dao.CartItemEntity
+>>>>>>> Development-Carlos
 import com.techmarketplace.domain.cart.CartItemUpdate
 import com.techmarketplace.domain.cart.CartRepository
 import com.techmarketplace.domain.cart.CartState
-import com.techmarketplace.domain.cart.CartSyncOperation
 import com.techmarketplace.domain.cart.CartVariantDetail
-import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -20,64 +22,59 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 class CartRepositoryImpl(
     private val local: CartLocalDataSource,
-    private val remote: CartRemoteDataSource,
-    connectivityFlow: Flow<Boolean>,
+    connectivityFlow: Flow<Boolean>?,
     private val scope: CoroutineScope,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : CartRepository {
 
+    private val isOnline = MutableStateFlow(true)
+
     private val _cartState = MutableStateFlow(CartState())
     override val cartState: StateFlow<CartState> = _cartState
 
-    private val isOnline = MutableStateFlow(false)
-    private val lastError = AtomicReference<String?>(null)
-    private val syncMutex = Mutex()
-
     init {
-        scope.launch { observeConnectivity(connectivityFlow) }
         scope.launch { observeLocalChanges() }
+        connectivityFlow?.let { flow ->
+            scope.launch { observeConnectivity(flow) }
+        }
     }
 
-    private suspend fun observeConnectivity(connectivityFlow: Flow<Boolean>) {
-        connectivityFlow.distinctUntilChanged().collect { online ->
+    private suspend fun observeConnectivity(flow: Flow<Boolean>) {
+        flow.distinctUntilChanged().collect { online ->
             isOnline.value = online
-            if (online) {
-                flushPendingOperations()
-                refresh()
-            } else {
-                updateState { it.copy(isOffline = true) }
-            }
+            updateState { it.copy(isOffline = !online) }
         }
     }
 
     private suspend fun observeLocalChanges() {
         combine(local.cartViewport, local.metadata, isOnline) { viewport, metadata, online ->
-            buildState(viewport, metadata.lastSyncEpochMillis, online)
+            CartState(
+                items = viewport.active.map { it.toDomain() },
+                isOffline = !online,
+                hasExpiredItems = viewport.expiredCount > 0,
+                lastSyncEpochMillis = metadata.lastSyncEpochMillis,
+                pendingOperationCount = 0,
+                errorMessage = null
+            )
         }.collect { state ->
-            _cartState.value = state.copy(errorMessage = lastError.get())
+            _cartState.value = state
         }
     }
 
-    private fun buildState(viewport: CartViewport, lastSync: Long?, online: Boolean): CartState {
-        val items = viewport.active.map { it.toDomain() }
-        val pending = viewport.active.count { it.pendingOperation != null }
-        return CartState(
-            items = items,
-            isOffline = !online,
-            hasExpiredItems = viewport.expiredCount > 0,
-            lastSyncEpochMillis = lastSync,
-            pendingOperationCount = pending,
-            errorMessage = lastError.get()
-        )
+    override suspend fun refresh() {
+<<<<<<< HEAD
+        withContext(dispatcher) { local.evictExpired() }
     }
 
-    override suspend fun refresh() {
+    override suspend fun addOrUpdate(item: CartItemUpdate) {
+        withContext(dispatcher) {
+            local.upsert(item, clearPending = true)
+            local.updateLastSync()
+=======
         if (!isOnline.value) {
             local.evictExpired()
             return
@@ -127,10 +124,16 @@ class CartRepositoryImpl(
                 }
             }
             setError(error)
+>>>>>>> Development-Carlos
         }
     }
 
     override suspend fun updateQuantity(itemId: String, quantity: Int) {
+<<<<<<< HEAD
+        withContext(dispatcher) {
+            local.updateQuantity(itemId, quantity, markPending = false)
+            local.updateLastSync()
+=======
         val existing = local.getItem(itemId) ?: return
         val online = isOnline.value
         val updated = local.updateQuantity(itemId, quantity, markPending = !online)
@@ -156,40 +159,22 @@ class CartRepositoryImpl(
                 }
             }
             setError(error)
+>>>>>>> Development-Carlos
         }
     }
 
+    @Suppress("UNUSED_PARAMETER")
     override suspend fun remove(itemId: String, variantDetails: List<CartVariantDetail>) {
-        val existing = local.getItem(itemId) ?: return
-        local.removeById(itemId, markPending = true)
-        val online = isOnline.value
-        if (!online) return
-
-        val pendingEntity = local.getItem(itemId) ?: existing.copy(
-            quantity = 0,
-            pendingOperation = CartSyncOperation.REMOVE,
-            pendingQuantity = existing.quantity
-        )
-
-        val remoteId = pendingEntity.serverId
-        if (remoteId.isNullOrBlank()) {
-            local.markSynced(pendingEntity)
+        withContext(dispatcher) {
+            local.removeById(itemId, markPending = false)
             local.updateLastSync()
-            clearError()
-            return
-        }
-
-        runCatching {
-            withContext(dispatcher) { remote.removeItem(remoteId) }
-            local.markSynced(pendingEntity)
-            local.updateLastSync()
-            clearError()
-        }.onFailure { error ->
-            setError(error)
         }
     }
 
     override suspend fun onLogin() {
+<<<<<<< HEAD
+        // Cart is stored locally; nothing extra to do when the user logs in.
+=======
         if (isOnline.value) {
             flushPendingOperations()
             refresh()
@@ -240,11 +225,14 @@ class CartRepositoryImpl(
         val id = CartLocalDataSource.buildCartItemId(item.productId, item.variantDetails)
         val existing = local.getItem(id)
         return if (existing == null) CartSyncOperation.ADD else CartSyncOperation.UPDATE
+>>>>>>> Development-Carlos
     }
 
     private fun updateState(transform: (CartState) -> CartState) {
         _cartState.value = transform(_cartState.value)
     }
+<<<<<<< HEAD
+=======
 
     private fun clearError() {
         lastError.set(null)
@@ -315,4 +303,5 @@ class CartRepositoryImpl(
         data class RetryError(val error: Throwable) : MissingCartResolution
     }
 
+>>>>>>> Development-Carlos
 }

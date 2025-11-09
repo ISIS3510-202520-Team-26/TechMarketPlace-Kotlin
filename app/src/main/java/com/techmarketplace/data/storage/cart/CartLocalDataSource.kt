@@ -192,6 +192,11 @@ class CartLocalDataSource(
         preferences.updateLastSync(nowProvider())
     }
 
+    suspend fun clearAll() = withContext(dispatcher) {
+        cartDao.deleteAll()
+        preferences.clearLastSync()
+    }
+
     private suspend fun evictExpiredInternal(): Int {
         val now = nowProvider()
         return cartDao.deleteExpired(now)

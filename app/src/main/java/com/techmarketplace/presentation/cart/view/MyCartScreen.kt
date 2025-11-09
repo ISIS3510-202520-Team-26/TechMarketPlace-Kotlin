@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.windowInsetsTopHeight
@@ -52,6 +53,7 @@ import com.techmarketplace.core.ui.GreenScaffold
 import com.techmarketplace.domain.cart.CartItem
 import com.techmarketplace.domain.cart.CartState
 import com.techmarketplace.presentation.cart.viewmodel.CartViewModel
+import com.techmarketplace.presentation.cart.viewmodel.CartViewModel.CartEvent
 import java.text.DateFormat
 import java.util.Locale
 
@@ -70,6 +72,19 @@ fun MyCartScreen(
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let { message ->
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    LaunchedEffect(viewModel) {
+        viewModel.events.collect { event ->
+            when (event) {
+                CartEvent.CheckoutScheduled -> Toast.makeText(
+                    context,
+                    "Order queued – we'll keep trying if you're offline",
+                    Toast.LENGTH_SHORT
+                ).show()
+                is CartEvent.Error -> Toast.makeText(context, event.message, Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -94,10 +109,8 @@ fun MyCartScreen(
         CheckoutPanel(
             totalLabel = formatPrice(totalCents, totalCurrency),
             isOffline = state.isOffline,
-            pendingOperations = state.pendingOperationCount,
-            onCheckout = {
-                Toast.makeText(context, "Checkout coming soon", Toast.LENGTH_SHORT).show()
-            },
+            hasItems = state.items.isNotEmpty(),
+            onCheckout = { viewModel.checkout() },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 8.dp)
@@ -120,13 +133,6 @@ private fun BoxScope.CartContent(
 
         if (state.isOffline) {
             StatusPill(text = "Offline – changes will sync later", color = Color(0xFFFFC107))
-        }
-
-        if (state.pendingOperationCount > 0) {
-            StatusPill(
-                text = "Pending sync: ${state.pendingOperationCount}",
-                color = Color(0xFF80CBC4)
-            )
         }
 
         if (state.hasExpiredItems) {
@@ -308,7 +314,7 @@ private fun CircleAction(text: String, filled: Boolean, onClick: () -> Unit) {
 private fun CheckoutPanel(
     totalLabel: String,
     isOffline: Boolean,
-    pendingOperations: Int,
+    hasItems: Boolean,
     onCheckout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -326,18 +332,10 @@ private fun CheckoutPanel(
                 Text("Total", color = GreenDark.copy(alpha = 0.8f), fontWeight = FontWeight.SemiBold)
                 Text(totalLabel, color = GreenDark, fontWeight = FontWeight.SemiBold)
             }
-            if (pendingOperations > 0) {
-                Text(
-                    text = "Waiting to sync $pendingOperations change(s)",
-                    color = Color(0xFF6B7783),
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
             Spacer(Modifier.height(10.dp))
             Button(
                 onClick = onCheckout,
-                enabled = pendingOperations == 0 && !isOffline,
+                enabled = hasItems && !isOffline,
                 shape = RoundedCornerShape(28.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = GreenDark,

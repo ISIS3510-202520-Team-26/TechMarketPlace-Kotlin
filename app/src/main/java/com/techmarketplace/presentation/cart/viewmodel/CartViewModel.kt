@@ -6,42 +6,40 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.techmarketplace.core.connectivity.ConnectivityObserver
-import com.techmarketplace.data.remote.ApiClient
-import com.techmarketplace.data.remote.api.CartRemoteDataSource
-import com.techmarketplace.data.remote.api.NoOpCartRemoteDataSource
-import com.techmarketplace.data.remote.api.RetrofitCartRemoteDataSource
 import com.techmarketplace.data.repository.cart.CartRepositoryImpl
 import com.techmarketplace.data.storage.CartPreferences
 import com.techmarketplace.data.storage.cart.CartLocalDataSource
 import com.techmarketplace.data.storage.dao.CartDatabaseProvider
-import com.techmarketplace.data.work.CartValidationWorker
-import com.techmarketplace.data.work.CartWorkerDependencies
+import com.techmarketplace.data.work.OrderPlacementWorker
 import com.techmarketplace.domain.cart.CartItemUpdate
 import com.techmarketplace.domain.cart.CartState
 import com.techmarketplace.domain.cart.CartVariantDetail
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 class CartViewModel(
     app: Application,
-    private val localDataSource: CartLocalDataSource,
-    private val remoteDataSource: CartRemoteDataSource,
+    localDataSource: CartLocalDataSource,
     private val connectivityFlow: Flow<Boolean>
 ) : AndroidViewModel(app) {
 
-    private val repository = CartRepositoryImpl(localDataSource, remoteDataSource, connectivityFlow, viewModelScope)
+    private val repository = CartRepositoryImpl(localDataSource, connectivityFlow, viewModelScope)
 
     val state: StateFlow<CartState> = repository.cartState
 
+    private val _events = MutableSharedFlow<CartEvent>()
+    val events: SharedFlow<CartEvent> = _events.asSharedFlow()
+
     init {
-        CartWorkerDependencies.remoteDataSource = remoteDataSource
         viewModelScope.launch {
             connectivityFlow.distinctUntilChanged().collect { online ->
                 if (online) {
                     repository.refresh()
-                    CartValidationWorker.schedule(app)
                 }
             }
         }
@@ -67,6 +65,17 @@ class CartViewModel(
         viewModelScope.launch { repository.onLogin() }
     }
 
+    fun checkout() {
+        viewModelScope.launch {
+            if (state.value.items.isEmpty()) {
+                _events.emit(CartEvent.Error("Your cart is empty"))
+                return@launch
+            }
+            OrderPlacementWorker.enqueue(getApplication())
+            _events.emit(CartEvent.CheckoutScheduled)
+        }
+    }
+
     companion object {
         fun factory(app: Application): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -74,14 +83,14 @@ class CartViewModel(
                 val database = CartDatabaseProvider.get(app)
                 val preferences = CartPreferences(app)
                 val local = CartLocalDataSource(database.cartDao(), preferences)
-                val remote: CartRemoteDataSource = try {
-                    RetrofitCartRemoteDataSource(ApiClient.cartApi())
-                } catch (_: IllegalStateException) {
-                    NoOpCartRemoteDataSource()
-                }
                 val connectivity = ConnectivityObserver.observe(app)
-                return CartViewModel(app, local, remote, connectivity) as T
+                return CartViewModel(app, local, connectivity) as T
             }
         }
+    }
+
+    sealed interface CartEvent {
+        object CheckoutScheduled : CartEvent
+        data class Error(val message: String) : CartEvent
     }
 }
