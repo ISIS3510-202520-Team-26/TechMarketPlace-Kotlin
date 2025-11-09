@@ -34,6 +34,33 @@ class AuthRepository(context: Context) {
             }
         }
 
+    suspend fun hasValidSession(): Boolean = withContext(Dispatchers.IO) {
+        val access = store.getAccessTokenOnce()
+        if (access.isNullOrBlank()) return@withContext false
+
+        try {
+            api.me()
+            true
+        } catch (t: Throwable) {
+            when (t) {
+                is HttpException -> {
+                    if (t.code() == 401) {
+                        store.clear()
+                        false
+                    } else {
+                        true
+                    }
+                }
+                is IOException -> true
+                else -> false
+            }
+        }
+    }
+
+    suspend fun logout() = withContext(Dispatchers.IO) {
+        store.clear()
+    }
+
     suspend fun registerDetailed(
         name: String,
         email: String,
