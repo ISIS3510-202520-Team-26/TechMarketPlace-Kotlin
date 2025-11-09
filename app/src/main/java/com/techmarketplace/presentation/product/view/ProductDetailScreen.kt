@@ -2,14 +2,40 @@
 
 package com.techmarketplace.presentation.product.view
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Divider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -18,9 +44,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.techmarketplace.data.remote.ApiClient
-import com.techmarketplace.data.remote.dto.ListingDetailDto
 import com.techmarketplace.data.remote.api.TelemetryBatch
 import com.techmarketplace.data.remote.api.TelemetryEvent
+import com.techmarketplace.data.remote.dto.ListingDetailDto
+import com.techmarketplace.domain.cart.CartItemUpdate
+import com.techmarketplace.presentation.cart.viewmodel.CartViewModel
 import java.time.Instant
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
@@ -28,6 +56,7 @@ import retrofit2.HttpException
 @Composable
 fun ProductDetailRoute(
     listingId: String,
+    cartViewModel: CartViewModel,
     onBack: () -> Unit
 ) {
     val api = remember { ApiClient.listingApi() }
@@ -99,8 +128,36 @@ fun ProductDetailRoute(
         categoryName = categoryName,
         brandName = brandName,
         onBack = onBack,
-        onBuy = {
-            scope.launch { snack.showSnackbar("Comprar: próximamente") }
+        onAddToCart = {
+            scope.launch {
+                val current = detail
+                if (current == null) {
+                    snack.showSnackbar("Listing not loaded yet")
+                    return@launch
+                }
+                val price = current.priceCents
+                val currency = current.currency
+                val title = current.title
+                if (price == null || currency.isNullOrBlank() || title.isNullOrBlank()) {
+                    snack.showSnackbar("Listing is missing price information")
+                    return@launch
+                }
+                val update = CartItemUpdate(
+                    productId = current.id,
+                    title = title,
+                    priceCents = price,
+                    currency = currency,
+                    quantity = 1,
+                    thumbnailUrl = current.photos.firstOrNull()?.imageUrl
+                )
+                cartViewModel.addOrUpdate(update)
+                val state = cartViewModel.state.value
+                when {
+                    state.errorMessage != null -> snack.showSnackbar(state.errorMessage!!)
+                    state.isOffline -> snack.showSnackbar("Saved offline – will sync when connected")
+                    else -> snack.showSnackbar("Added to cart")
+                }
+            }
         },
         snack = snack
     )
@@ -114,7 +171,7 @@ private fun ProductDetailScreen(
     categoryName: String?,
     brandName: String?,
     onBack: () -> Unit,
-    onBuy: () -> Unit,
+    onAddToCart: () -> Unit,
     snack: SnackbarHostState
 ) {
     Scaffold(
@@ -216,12 +273,12 @@ private fun ProductDetailScreen(
 
                     Spacer(Modifier.height(12.dp))
                     Button(
-                        onClick = onBuy,
+                        onClick = onAddToCart,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(52.dp),
                         shape = RoundedCornerShape(12.dp)
-                    ) { Text("Comprar", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+                    ) { Text("Add to cart", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
                     Spacer(Modifier.height(8.dp))
                 }
             }

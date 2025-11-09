@@ -9,6 +9,7 @@ import com.techmarketplace.data.remote.dto.ListingSummaryDto
 import com.techmarketplace.data.remote.dto.UserMe
 import com.techmarketplace.data.repository.AuthRepository
 import com.techmarketplace.data.repository.ListingsRepository
+import com.techmarketplace.data.storage.HomeFeedCacheStore
 import com.techmarketplace.data.storage.LocationStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -118,7 +119,8 @@ class ProfileViewModel(
                     val authRepository = AuthRepository(app)
                     val listingsRepository = ListingsRepository(
                         api = ApiClient.listingApi(),
-                        locationStore = LocationStore(app)
+                        locationStore = LocationStore(app),
+                        homeFeedCacheStore = HomeFeedCacheStore(app)
                     )
                     return ProfileViewModel(authRepository, listingsRepository) as T
                 }
