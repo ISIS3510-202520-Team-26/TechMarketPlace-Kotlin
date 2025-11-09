@@ -222,6 +222,8 @@ class CartRepositoryImpl(
                         if (recovered) {
                             return flushPendingOperations()
                         }
+                        local.markSynced(*pending.toTypedArray())
+                        local.clearLastSync()
                         clearError()
                     } else {
                         setError(error)
@@ -257,6 +259,9 @@ class CartRepositoryImpl(
     private suspend fun handleMissingCartForUpsert(entity: CartItemEntity): MissingCartResolution {
         val recovered = recoverFromMissingRemoteCart()
         if (!recovered) {
+            local.getItem(entity.cartItemId)?.let { current ->
+                local.markSynced(current)
+            }
             clearError()
             return MissingCartResolution.Handled
         }
