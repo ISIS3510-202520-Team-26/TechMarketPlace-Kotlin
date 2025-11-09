@@ -1,8 +1,10 @@
 package com.techmarketplace.data.repository.cart
 
 import com.techmarketplace.data.remote.api.CartRemoteDataSource
+import com.techmarketplace.data.remote.api.MissingRemoteCartException
 import com.techmarketplace.data.storage.cart.CartLocalDataSource
 import com.techmarketplace.data.storage.cart.CartViewport
+import com.techmarketplace.data.storage.dao.CartItemEntity
 import com.techmarketplace.domain.cart.CartItemUpdate
 import com.techmarketplace.domain.cart.CartRepository
 import com.techmarketplace.domain.cart.CartState
@@ -82,13 +84,17 @@ class CartRepositoryImpl(
         }
         runCatching {
             val response = withContext(dispatcher) { remote.fetchCart() }
-            val ttl = response.ttlMillis
-            if (ttl != null) {
-                local.updateTtl(ttl)
+            if (response.isMissing) {
+                local.clearLastSync()
+            } else {
+                val ttl = response.ttlMillis
+                if (ttl != null) {
+                    local.updateTtl(ttl)
+                }
+                val now = System.currentTimeMillis()
+                val entities = response.items.map { it.toEntity(now) }
+                local.replaceWithRemote(entities, ttl)
             }
-            val now = System.currentTimeMillis()
-            val entities = response.items.map { it.toEntity(now) }
-            local.replaceWithRemote(entities, ttl)
             clearError()
         }.onFailure { error ->
             setError(error)
@@ -103,14 +109,23 @@ class CartRepositoryImpl(
             return
         }
 
-        runCatching {
+        try {
             val response = withContext(dispatcher) { remote.upsertItem(prepared.toRemoteItem()) }
             val update = response.toUpdate()
             local.upsert(update, clearPending = true)
             local.updateLastSync()
             clearError()
-        }.onFailure { error ->
+        } catch (error: Throwable) {
             local.upsert(item, markPending = operation)
+            if (error is MissingRemoteCartException) {
+                when (val resolution = handleMissingCartForUpsert(prepared)) {
+                    MissingCartResolution.Handled -> return
+                    is MissingCartResolution.RetryError -> {
+                        setError(resolution.error)
+                        return
+                    }
+                }
+            }
             setError(error)
         }
     }
@@ -121,14 +136,25 @@ class CartRepositoryImpl(
         val updated = local.updateQuantity(itemId, quantity, markPending = !online)
         if (!online || updated == null) return
 
-        runCatching {
+        try {
             val response = withContext(dispatcher) { remote.upsertItem(updated.toRemoteItem()) }
             val update = response.toUpdate()
             local.upsert(update, clearPending = true)
             local.updateLastSync()
             clearError()
-        }.onFailure { error ->
+        } catch (error: Throwable) {
             local.updateQuantity(itemId, quantity, markPending = true)
+            if (error is MissingRemoteCartException) {
+                if (updated != null) {
+                    when (val resolution = handleMissingCartForUpsert(updated)) {
+                        MissingCartResolution.Handled -> return
+                        is MissingCartResolution.RetryError -> {
+                            setError(resolution.error)
+                            return
+                        }
+                    }
+                }
+            }
             setError(error)
         }
     }
@@ -191,7 +217,17 @@ class CartRepositoryImpl(
                         null -> Unit
                     }
                 } catch (error: Exception) {
-                    setError(error)
+                    if (error is MissingRemoteCartException) {
+                        val recovered = recoverFromMissingRemoteCart()
+                        if (recovered) {
+                            return flushPendingOperations()
+                        }
+                        local.markSynced(*pending.toTypedArray())
+                        local.clearLastSync()
+                        clearError()
+                    } else {
+                        setError(error)
+                    }
                     return
                 }
             }
@@ -218,6 +254,65 @@ class CartRepositoryImpl(
     private fun setError(error: Throwable) {
         lastError.set(error.message ?: error.javaClass.simpleName)
         updateState { it.copy(errorMessage = lastError.get()) }
+    }
+
+    private suspend fun handleMissingCartForUpsert(entity: CartItemEntity): MissingCartResolution {
+        val recovered = recoverFromMissingRemoteCart()
+        if (!recovered) {
+            local.getItem(entity.cartItemId)?.let { current ->
+                local.markSynced(current)
+            }
+            clearError()
+            return MissingCartResolution.Handled
+        }
+        val latest = local.getItem(entity.cartItemId) ?: entity
+        return runCatching {
+            withContext(dispatcher) { remote.upsertItem(latest.toRemoteItem()) }
+        }.fold(
+            onSuccess = { response ->
+                local.upsert(response.toUpdate(), clearPending = true)
+                local.updateLastSync()
+                clearError()
+                MissingCartResolution.Handled
+            },
+            onFailure = { error ->
+                MissingCartResolution.RetryError(error)
+            }
+        )
+    }
+
+    private suspend fun recoverFromMissingRemoteCart(): Boolean {
+        val active = local.getActive()
+        if (active.isEmpty()) {
+            local.clearLastSync()
+            return true
+        }
+        return runCatching {
+            withContext(dispatcher) {
+                remote.replaceAll(active.map { it.copy(serverId = null).toRemoteItem() })
+            }
+        }.fold(
+            onSuccess = { result ->
+                val ttl = result.ttlMillis
+                if (ttl != null) {
+                    local.updateTtl(ttl)
+                }
+                val now = System.currentTimeMillis()
+                val entities = result.items.map { it.toEntity(now) }
+                local.replaceWithRemote(entities, ttl)
+                clearError()
+                true
+            },
+            onFailure = {
+                local.clearLastSync()
+                false
+            }
+        )
+    }
+
+    private sealed interface MissingCartResolution {
+        object Handled : MissingCartResolution
+        data class RetryError(val error: Throwable) : MissingCartResolution
     }
 
 }
