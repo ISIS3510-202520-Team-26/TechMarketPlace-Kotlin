@@ -10,7 +10,17 @@ data class LocalTelemetry(val type: String, val props: String, val at: Long)
 object MyOrdersStore {
     private val _orders = MutableStateFlow<List<LocalOrder>>(emptyList())
     val orders: StateFlow<List<LocalOrder>> = _orders
-    fun add(o: LocalOrder) { _orders.value = _orders.value + o }
+
+    fun add(o: LocalOrder) {
+        val current = _orders.value.toMutableList()
+        val existingIndex = current.indexOfFirst { it.id == o.id }
+        if (existingIndex >= 0) {
+            current[existingIndex] = o
+        } else {
+            current.add(o)
+        }
+        _orders.value = current
+    }
 }
 
 object MyPaymentsStore {
