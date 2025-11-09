@@ -37,9 +37,13 @@ import com.techmarketplace.core.ui.BottomBar
 import com.techmarketplace.core.ui.BottomItem
 import com.techmarketplace.data.remote.ApiClient
 import com.techmarketplace.data.remote.api.ImagesApi
+import com.techmarketplace.data.remote.dto.SearchListingsResponse
+import com.techmarketplace.data.repository.ListingsRepository
 import com.techmarketplace.data.storage.LocationStore
 import com.techmarketplace.data.storage.getAndSaveLocation
+import com.techmarketplace.data.storage.HomeFeedCacheStore
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import retrofit2.HttpException
 import com.techmarketplace.data.telemetry.LoginTelemetry
 import com.techmarketplace.data.storage.CategoryClickStore
@@ -72,6 +76,14 @@ fun HomeRoute(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val locationStore = remember { LocationStore(context) }
+    val homeFeedCacheStore = remember { HomeFeedCacheStore(context) }
+    val listingsRepository = remember {
+        ListingsRepository(
+            api = api,
+            locationStore = locationStore,
+            homeFeedCacheStore = homeFeedCacheStore
+        )
+    }
 
     // Ranking local de clicks por categoría
     val clickStore = remember { CategoryClickStore(context) }
@@ -158,28 +170,8 @@ fun HomeRoute(
     var nearEnabled by remember { mutableStateOf(false) }
     var radiusKm by remember { mutableStateOf(5f) }
 
-    suspend fun listOnce(
-        q: String? = null,
-        categoryId: String? = null,
-        useNear: Boolean,
-        nearLat: Double?,
-        nearLon: Double?,
-        radius: Double?
-    ): List<UiProduct> {
-        val res = api.searchListings(
-            q = q,
-            categoryId = categoryId,
-            brandId = null,
-            minPrice = null,
-            maxPrice = null,
-            nearLat = if (useNear) nearLat else null,
-            nearLon = if (useNear) nearLon else null,
-            radiusKm = if (useNear) radius else null,
-            page = 1,
-            pageSize = 50
-        )
-
-        return res.items.map { dto ->
+    suspend fun SearchListingsResponse.toUiProducts(): List<UiProduct> {
+        return items.map { dto ->
             val firstPhoto = dto.photos.firstOrNull()
 
             val resolvedUrl: String? = when {
@@ -199,7 +191,6 @@ fun HomeRoute(
                 else -> null
             }
 
-            // Lee campos planos si existen (evita referencias no resueltas)
             val catId: String? = readFieldOrNull<String>(dto, "categoryId", "category_id")
             val catName: String? = readFieldOrNull<String>(dto, "categoryName", "category_name")
             val brId: String? = readFieldOrNull<String>(dto, "brandId", "brand_id")
@@ -220,27 +211,55 @@ fun HomeRoute(
         }
     }
 
+    suspend fun listOnce(
+        q: String? = null,
+        categoryId: String? = null,
+        useNear: Boolean,
+        nearLat: Double?,
+        nearLon: Double?,
+        radius: Double?
+    ): List<UiProduct> {
+        val response = listingsRepository.searchListings(
+            q = q,
+            categoryId = categoryId,
+            brandId = null,
+            minPrice = null,
+            maxPrice = null,
+            nearLat = if (useNear) nearLat else null,
+            nearLon = if (useNear) nearLon else null,
+            radiusKm = if (useNear) radius else null,
+            page = 1,
+            pageSize = 50
+        ).getOrElse { throw it }
+
+        return response.toUiProducts()
+    }
+
     fun fetchCategories() {
         scope.launch {
-            loading = true; error = null
             try {
-                val cats = api.getCategories().map { UiCategory(it.id, it.name) }
+                val cats = listingsRepository.getCategories().map { UiCategory(it.id, it.name) }
                 categories = listOf(UiCategory(id = "", name = "All")) + cats
                 categoriesLoaded = true
-            } catch (e: HttpException) {
-                val body = e.response()?.errorBody()?.string()
-                error = "HTTP ${e.code()}${if (!body.isNullOrBlank()) " – $body" else ""}"
             } catch (e: Exception) {
-                error = e.message ?: "Network error"
-            } finally {
-                loading = false
+                Log.w("HomeRoute", "fetchCategories failed", e)
+                if (products.isEmpty()) {
+                    error = e.message ?: "Network error"
+                }
             }
         }
     }
 
+    var fetchJob by remember { mutableStateOf<Job?>(null) }
+
     fun fetchListings() {
-        scope.launch {
-            loading = true; error = null
+        fetchJob?.cancel()
+        fetchJob = scope.launch {
+            val showSpinner = products.isEmpty()
+            if (showSpinner) {
+                loading = true
+            }
+            error = null
             try {
                 val useNear = nearEnabled && lat != null && lon != null
                 products = listOnce(
@@ -255,10 +274,14 @@ fun HomeRoute(
                 val body = e.response()?.errorBody()?.string()
                 error = if (e.code() == 500) "El backend devolvió 500 al listar."
                 else "HTTP ${e.code()}${if (!body.isNullOrBlank()) " – $body" else ""}"
-                products = emptyList()
+                if (products.isEmpty()) {
+                    products = emptyList()
+                }
             } catch (e: Exception) {
                 error = e.message ?: "Network error"
-                products = emptyList()
+                if (products.isEmpty()) {
+                    products = emptyList()
+                }
             } finally {
                 loading = false
             }
@@ -283,6 +306,10 @@ fun HomeRoute(
     LaunchedEffect(Unit) {
         if (!didInitialFetch) {
             didInitialFetch = true
+            val cached = homeFeedCacheStore.read()
+            if (cached != null) {
+                products = cached.toResponse().toUiProducts()
+            }
             fetchCategories()
             fetchListings()
         }
