@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.remove
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.techmarketplace.data.remote.dto.ListingSummaryDto
@@ -63,7 +62,7 @@ class HomeFeedCacheStore @JvmOverloads constructor(
 
     suspend fun clear() {
         dataStore.edit { prefs ->
-            prefs.remove(payloadKey)
+            prefs.clear()
         }
     }
 
