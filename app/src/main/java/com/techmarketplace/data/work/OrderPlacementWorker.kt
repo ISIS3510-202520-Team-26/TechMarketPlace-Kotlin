@@ -6,9 +6,9 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.techmarketplace.core.connectivity.ConnectivityObserver
 import com.techmarketplace.data.remote.ApiClient
 import com.techmarketplace.data.remote.dto.OrderCreateIn
+import com.techmarketplace.data.remote.dto.OrderOut
 import com.techmarketplace.data.storage.CartPreferences
 import com.techmarketplace.data.storage.LocalOrder
 import com.techmarketplace.data.storage.MyOrdersStore
@@ -16,6 +16,7 @@ import com.techmarketplace.data.storage.cart.CartLocalDataSource
 import com.techmarketplace.data.storage.dao.CartDatabaseProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import retrofit2.HttpException
 
 class OrderPlacementWorker(
     appContext: Context,
@@ -24,17 +25,8 @@ class OrderPlacementWorker(
 
     override suspend fun doWork(): Result {
         val context = applicationContext
-
-        // Ensure networking client is ready even if the worker runs while the app is backgrounded.
-        ApiClient.init(context)
-
-        if (!ConnectivityObserver.isOnlineNow(context)) {
-            return Result.retry()
-        }
-
         val database = CartDatabaseProvider.get(context)
         val local = CartLocalDataSource(database.cartDao(), CartPreferences(context))
-        val ordersApi = ApiClient.ordersApi()
 
         return withContext(Dispatchers.IO) {
             val items = local.getActive()
@@ -42,11 +34,12 @@ class OrderPlacementWorker(
                 return@withContext Result.success()
             }
 
-            val createdOrders = mutableListOf<LocalOrder>()
+            ApiClient.init(context)
+            val ordersApi = ApiClient.ordersApi()
 
             try {
                 items.forEach { entity ->
-                    val order = ordersApi.create(
+                    val created = ordersApi.create(
                         OrderCreateIn(
                             listingId = entity.productId,
                             quantity = entity.quantity,
@@ -54,19 +47,18 @@ class OrderPlacementWorker(
                             currency = entity.currency
                         )
                     )
-                    createdOrders += LocalOrder(
-                        id = order.id,
-                        listingId = order.listingId,
-                        totalCents = order.totalCents,
-                        currency = order.currency,
-                        status = order.status
-                    )
+                    MyOrdersStore.add(created.toLocalOrder())
                     local.removeById(entity.cartItemId, markPending = false)
                 }
 
-                createdOrders.forEach { MyOrdersStore.add(it) }
-                local.clearAll()
+                local.updateLastSync()
                 Result.success()
+            } catch (t: HttpException) {
+                if (t.code() in 400..499) {
+                    Result.failure()
+                } else {
+                    Result.retry()
+                }
             } catch (t: Throwable) {
                 Result.retry()
             }
@@ -85,3 +77,11 @@ class OrderPlacementWorker(
         }
     }
 }
+
+private fun OrderOut.toLocalOrder(): LocalOrder = LocalOrder(
+    id = id,
+    listingId = listingId,
+    totalCents = totalCents,
+    currency = currency,
+    status = status
+)
