@@ -14,4 +14,6 @@ interface CartRepository {
     suspend fun remove(itemId: String, variantDetails: List<CartVariantDetail>)
 
     suspend fun onLogin()
+
+    suspend fun clearErrorMessage()
 }

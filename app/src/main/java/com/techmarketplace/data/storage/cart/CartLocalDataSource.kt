@@ -192,9 +192,18 @@ class CartLocalDataSource(
         preferences.updateLastSync(nowProvider())
     }
 
+    suspend fun setErrorMessage(message: String) = withContext(dispatcher) {
+        preferences.setLastError(message)
+    }
+
+    suspend fun clearErrorMessage() = withContext(dispatcher) {
+        preferences.clearLastError()
+    }
+
     suspend fun clearAll() = withContext(dispatcher) {
         cartDao.deleteAll()
         preferences.clearLastSync()
+        preferences.clearLastError()
     }
 
     private suspend fun evictExpiredInternal(): Int {
