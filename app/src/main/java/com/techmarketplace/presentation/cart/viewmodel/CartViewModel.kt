@@ -76,6 +76,10 @@ class CartViewModel(
         }
     }
 
+    fun clearErrorMessage() {
+        viewModelScope.launch { repository.clearErrorMessage() }
+    }
+
     companion object {
         fun factory(app: Application): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")

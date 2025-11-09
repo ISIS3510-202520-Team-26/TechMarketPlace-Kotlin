@@ -51,7 +51,7 @@ class CartRepositoryImpl(
                 hasExpiredItems = viewport.expiredCount > 0,
                 lastSyncEpochMillis = metadata.lastSyncEpochMillis,
                 pendingOperationCount = 0,
-                errorMessage = null
+                errorMessage = metadata.lastErrorMessage
             )
         }.collect { state ->
             _cartState.value = state
@@ -86,5 +86,9 @@ class CartRepositoryImpl(
 
     override suspend fun onLogin() {
         // Cart is stored locally; nothing extra to do when the user logs in.
+    }
+
+    override suspend fun clearErrorMessage() {
+        withContext(dispatcher) { local.clearErrorMessage() }
     }
 }

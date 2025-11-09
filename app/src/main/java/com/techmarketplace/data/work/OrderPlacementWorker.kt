@@ -17,6 +17,7 @@ import com.techmarketplace.data.storage.dao.CartDatabaseProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
+import org.json.JSONObject
 
 class OrderPlacementWorker(
     appContext: Context,
@@ -38,27 +39,48 @@ class OrderPlacementWorker(
             val ordersApi = ApiClient.ordersApi()
 
             try {
+                var userFacingError: String? = null
+
                 items.forEach { entity ->
-                    val created = ordersApi.create(
-                        OrderCreateIn(
-                            listingId = entity.productId,
-                            quantity = entity.quantity,
-                            totalCents = entity.priceCents * entity.quantity,
-                            currency = entity.currency
+                    try {
+                        val created = ordersApi.create(
+                            OrderCreateIn(
+                                listingId = entity.productId,
+                                quantity = entity.quantity,
+                                totalCents = entity.priceCents * entity.quantity,
+                                currency = entity.currency
+                            )
                         )
-                    )
-                    MyOrdersStore.add(created.toLocalOrder())
-                    local.removeById(entity.cartItemId, markPending = false)
+                        MyOrdersStore.add(created.toLocalOrder())
+                        local.removeById(entity.cartItemId, markPending = false)
+                    } catch (http: HttpException) {
+                        if (http.code() >= 500 || http.code() == 429) throw http
+
+                        val detail = http.readErrorDetail()
+                        if (detail != null) {
+                            if (userFacingError == null) {
+                                userFacingError = detail
+                            }
+                        } else if (userFacingError == null) {
+                            userFacingError = "Unable to place order (${http.code()})"
+                        }
+
+                        if (http.code() == 400 && detail?.contains("own listing", ignoreCase = true) == true) {
+                            local.removeById(entity.cartItemId, markPending = false)
+                        }
+                    }
+                }
+
+                if (userFacingError != null) {
+                    local.setErrorMessage(userFacingError!!)
+                } else {
+                    local.clearErrorMessage()
                 }
 
                 local.updateLastSync()
                 Result.success()
             } catch (t: HttpException) {
-                if (t.code() in 400..499) {
-                    Result.failure()
-                } else {
-                    Result.retry()
-                }
+                Result.retry()
             } catch (t: Throwable) {
                 Result.retry()
             }
@@ -85,3 +107,16 @@ private fun OrderOut.toLocalOrder(): LocalOrder = LocalOrder(
     currency = currency,
     status = status
 )
+
+private fun HttpException.readErrorDetail(): String? = try {
+    response()?.errorBody()?.charStream()?.use { stream ->
+        val text = stream.readText()
+        if (text.isBlank()) {
+            null
+        } else {
+            JSONObject(text).optString("detail").takeIf { it.isNotBlank() }
+        }
+    }
+} catch (_: Exception) {
+    null
+}

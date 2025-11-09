@@ -72,6 +72,7 @@ fun MyCartScreen(
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let { message ->
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            viewModel.clearErrorMessage()
         }
     }
 
