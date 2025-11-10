@@ -1,5 +1,6 @@
 package com.techmarketplace.domain.telemetry
 
+import com.techmarketplace.analytics.SearchTelemetryEvent
 import com.techmarketplace.core.data.Resource
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicBoolean
@@ -82,6 +83,7 @@ private class FakeTelemetryRepository : TelemetryRepository {
     var failNextRefresh: Throwable? = null
     var nextAfterRefresh: SellerResponseMetrics? = null
     val refreshCalled = AtomicBoolean(false)
+    val recordedEvents = mutableListOf<SearchTelemetryEvent.FilterApplied>()
 
     override fun observeSellerResponseMetrics(sellerId: String): Flow<SellerResponseMetrics?> = current
 
@@ -97,6 +99,14 @@ private class FakeTelemetryRepository : TelemetryRepository {
     }
 
     override suspend fun isCacheExpired(sellerId: String, ttlMillis: Long): Boolean = cacheExpired
+
+    override suspend fun recordSearchEvent(event: SearchTelemetryEvent.FilterApplied) {
+        recordedEvents += event
+    }
+
+    override fun observeFilterFrequencies(): Flow<Map<String, Int>> = MutableStateFlow(emptyMap())
+
+    override suspend fun getFilterFrequencies(): Map<String, Int> = emptyMap()
 }
 
 private fun sampleMetrics(fetchedAt: Long): SellerResponseMetrics = SellerResponseMetrics(

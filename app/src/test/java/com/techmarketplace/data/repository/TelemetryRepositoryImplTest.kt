@@ -1,12 +1,15 @@
 package com.techmarketplace.data.repository
 
+import com.techmarketplace.analytics.SearchTelemetryEvent
 import com.techmarketplace.data.remote.api.TelemetryApi
 import com.techmarketplace.data.remote.api.TelemetryBatch
 import com.techmarketplace.data.remote.dto.SellerRankingEntryDto
 import com.techmarketplace.data.remote.dto.SellerResponseMetricsDto
 import com.techmarketplace.data.storage.dao.SellerMetricsDao
 import com.techmarketplace.data.storage.dao.SellerResponseMetricsEntity
+import java.time.Instant
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -22,7 +25,17 @@ class TelemetryRepositoryImplTest {
     private val now = AtomicLong(0L)
     private val dao = InMemorySellerMetricsDao()
     private val api = FakeTelemetryApi()
-    private val repository = TelemetryRepositoryImpl(api, dao, now::get)
+    private val sessionId = AtomicReference("session-1")
+    private val userId = AtomicReference<String?>("user-7")
+    private val timestamp = AtomicReference(Instant.parse("2024-01-01T00:00:00Z"))
+    private val repository = TelemetryRepositoryImpl(
+        api = api,
+        dao = dao,
+        now = now::get,
+        sessionIdProvider = { sessionId.get() },
+        userIdProvider = { userId.get() },
+        clock = { timestamp.get() }
+    )
 
     @Test
     fun refresh_inserts_and_emits_metrics() = runTest {
@@ -69,13 +82,32 @@ class TelemetryRepositoryImplTest {
         now.set(5_000L)
         assertTrue(repository.isCacheExpired("seller-1", ttlMillis = 2_000L))
     }
+
+    @Test
+    fun recordSearchEvent_tracks_counts_and_ingests_payload() = runTest {
+        repository.recordSearchEvent(SearchTelemetryEvent.FilterApplied(setOf("category:phones", "near:5km")))
+        repository.recordSearchEvent(SearchTelemetryEvent.FilterApplied(setOf("category:phones")))
+
+        val counts = repository.observeFilterFrequencies().first()
+        assertEquals(2, counts["category:phones"])
+        assertEquals(1, counts["near:5km"])
+
+        val lastEvent = api.lastBatch?.events?.single()
+        requireNotNull(lastEvent)
+        assertEquals("search.filter.applied", lastEvent.event_type)
+        assertEquals("session-1", lastEvent.session_id)
+        assertEquals("user-7", lastEvent.user_id)
+        assertEquals("category:phones", lastEvent.properties["filters"]?.split(',')?.first())
+        assertEquals(timestamp.get().toString(), lastEvent.occurred_at)
+    }
 }
 
 private class FakeTelemetryApi : TelemetryApi {
     var next: SellerResponseMetricsDto? = null
+    var lastBatch: TelemetryBatch? = null
 
     override suspend fun ingest(bearer: String?, body: TelemetryBatch) {
-        // no-op for tests
+        lastBatch = body
     }
 
     override suspend fun getSellerResponseMetrics(sellerId: String): SellerResponseMetricsDto {
