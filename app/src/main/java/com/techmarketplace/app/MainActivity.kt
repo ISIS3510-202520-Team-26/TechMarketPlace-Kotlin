@@ -95,6 +95,15 @@ class MainActivity : ComponentActivity() {
                     val app = context.applicationContext as Application
                     val scope = rememberCoroutineScope()
                     val authRepo = remember { AuthRepository(app) }
+                    var sessionState by remember { mutableStateOf(SessionState.Checking) }
+
+                    LaunchedEffect(Unit) {
+                        sessionState = if (authRepo.hasValidSession()) {
+                            SessionState.Authenticated
+                        } else {
+                            SessionState.NeedsAuth
+                        }
+                    }
 
                     // --- Ubicación: launcher a nivel raíz ---
                     val fusedClient = remember { LocationServices.getFusedLocationProviderClient(context) }
@@ -144,149 +153,163 @@ class MainActivity : ComponentActivity() {
 
                     val cartViewModel: CartViewModel = viewModel(factory = CartViewModel.factory(app))
 
-                    NavHost(navController = nav, startDestination = "login") {
-
-                        composable("welcome") {
-                            WelcomeScreen(onContinue = { nav.navigate("login") })
+                    LaunchedEffect(sessionState) {
+                        if (sessionState == SessionState.Authenticated) {
+                            cartViewModel.onLogin()
                         }
+                    }
 
-                        // LOGIN
-                        composable("login") {
-                            val authVM: LoginViewModel = viewModel(factory = LoginViewModel.factory(app))
-                            LoginScreen(
-                                onRegister = { nav.navigate("register") },
-                                onLogin = { email: String, pass: String ->
-                                    authVM.login(email, pass) { ok: Boolean ->
-                                        if (ok) {
-                                            Toast.makeText(context, "Welcome!", Toast.LENGTH_SHORT).show()
-                                            cartViewModel.onLogin()
-                                            // 👉 Ir DIRECTO al Home (sin LocationGate)
-                                            nav.navigate(BottomItem.Home.route) {
-                                                popUpTo("login") { inclusive = true }
+                    if (sessionState == SessionState.Checking) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator()
+                                Spacer(Modifier.height(12.dp))
+                                Text("Verificando sesión…")
+                            }
+                        }
+                    } else {
+                        val startDestination =
+                            if (sessionState == SessionState.Authenticated) BottomItem.Home.route else "login"
+
+                        NavHost(navController = nav, startDestination = startDestination) {
+                            composable("welcome") {
+                                WelcomeScreen(onContinue = { nav.navigate("login") })
+                            }
+
+                            // LOGIN
+                            composable("login") {
+                                val authVM: LoginViewModel = viewModel(factory = LoginViewModel.factory(app))
+                                LoginScreen(
+                                    onRegister = { nav.navigate("register") },
+                                    onLogin = { email: String, pass: String ->
+                                        authVM.login(email, pass) { ok: Boolean ->
+                                            if (ok) {
+                                                Toast.makeText(context, "Welcome!", Toast.LENGTH_SHORT).show()
+                                                sessionState = SessionState.Authenticated
+                                                // 👉 Ir DIRECTO al Home (sin LocationGate)
+                                                nav.navigate(BottomItem.Home.route) {
+                                                    popUpTo("login") { inclusive = true }
+                                                }
+                                            } else {
+                                                Toast.makeText(
+                                                    context,
+                                                    "Usuario o contraseña incorrectos",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
                                             }
-                                        } else {
-                                            Toast.makeText(
-                                                context,
-                                                "Usuario o contraseña incorrectos",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
                                         }
-                                    }
-                                },
-                                onGoogle = { /* si habilitas Google, lanza aquí */ }
-                            )
-                        }
+                                    },
+                                    onGoogle = { /* si habilitas Google, lanza aquí */ }
+                                )
+                            }
 
-                        // REGISTER
-                        composable("register") {
-                            val authVM: LoginViewModel = viewModel(factory = LoginViewModel.factory(app))
-                            RegisterScreen(
-                                onLoginNow = { nav.popBackStack() },
-                                onRegisterClick = { name: String, email: String, pass: String, campus: String? ->
-                                    authVM.register(name, email, pass, campus) { ok: Boolean ->
-                                        if (ok) {
-                                            Toast.makeText(context, "Account created!", Toast.LENGTH_SHORT).show()
-                                            cartViewModel.onLogin()
-                                            // 👉 También directo al Home
-                                            nav.navigate(BottomItem.Home.route) {
-                                                popUpTo("login") { inclusive = true }
+                            // REGISTER
+                            composable("register") {
+                                val authVM: LoginViewModel = viewModel(factory = LoginViewModel.factory(app))
+                                RegisterScreen(
+                                    onLoginNow = { nav.popBackStack() },
+                                    onRegisterClick = { name: String, email: String, pass: String, campus: String? ->
+                                        authVM.register(name, email, pass, campus) { ok: Boolean ->
+                                            if (ok) {
+                                                Toast.makeText(context, "Account created!", Toast.LENGTH_SHORT).show()
+                                                sessionState = SessionState.Authenticated
+                                                // 👉 También directo al Home
+                                                nav.navigate(BottomItem.Home.route) {
+                                                    popUpTo("login") { inclusive = true }
+                                                }
+                                            } else {
+                                                Toast.makeText(
+                                                    context,
+                                                    "No se pudo crear la cuenta",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
                                             }
-                                        } else {
-                                            Toast.makeText(
-                                                context,
-                                                "No se pudo crear la cuenta",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
                                         }
-                                    }
-                                },
-                                onGoogleClick = { /* deshabilitado */ }
-                            )
-                        }
+                                    },
+                                    onGoogleClick = { /* deshabilitado */ }
+                                )
+                            }
 
-                        // Gate que dispara el flujo de ubicación tras login/registro
-                        composable("locationGate") {
-                            LocationGateScreen(onStart = { startLocationFlow() })
-                        }
+                            // Gate que dispara el flujo de ubicación tras login/registro
+                            composable("locationGate") {
+                                LocationGateScreen(onStart = { startLocationFlow() })
+                            }
 
-                        // HOME
-                        composable(BottomItem.Home.route) {
-                            HomeRoute(
-                                onAddProduct = { nav.navigate("addProduct") },
-                                onOpenDetail = { id: String -> nav.navigate("listing/$id") },
-                                onNavigateBottom = navigateBottom
-                            )
-                        }
+                            // HOME
+                            composable(BottomItem.Home.route) {
+                                HomeRoute(
+                                    onAddProduct = { nav.navigate("addProduct") },
+                                    onOpenDetail = { id: String -> nav.navigate("listing/$id") },
+                                    onNavigateBottom = navigateBottom
+                                )
+                            }
 
-                        // DETALLE
-                        composable("listing/{id}") { backStackEntry: NavBackStackEntry ->
-                            val id = backStackEntry.arguments?.getString("id") ?: return@composable
-                            ProductDetailRoute(
-                                listingId = id,
-                                cartViewModel = cartViewModel,
-                                onBack = { nav.popBackStack() }
-                            )
-                        }
+                            // DETALLE
+                            composable("listing/{id}") { backStackEntry: NavBackStackEntry ->
+                                val id = backStackEntry.arguments?.getString("id") ?: return@composable
+                                ProductDetailRoute(
+                                    listingId = id,
+                                    cartViewModel = cartViewModel,
+                                    onBack = { nav.popBackStack() }
+                                )
+                            }
 
-                        // ADD PRODUCT
-                        composable("addProduct") {
-                            AddProductRoute(
-                                onCancel = { nav.popBackStack() },
-                                onSaved = { nav.popBackStack() }
-                            )
-                        }
+                            // ADD PRODUCT
+                            composable("addProduct") {
+                                AddProductRoute(
+                                    onCancel = { nav.popBackStack() },
+                                    onSaved = { nav.popBackStack() }
+                                )
+                            }
 
-                        // ORDER & CART
-                        composable(BottomItem.Order.route) {
-                            OrderScreen(
-                                onNavigateBottom = { navigateBottom(BottomItem.Home) }
-                            )
-                        }
-                        composable(BottomItem.Cart.route) {
-                            MyCartScreen(
-                                viewModel = cartViewModel,
-                                onNavigateBottom = { navigateBottom(BottomItem.Home) }
-                            )
-                        }
+                            // ORDER & CART
+                            composable(BottomItem.Order.route) {
+                                OrderScreen(
+                                    onNavigateBottom = { navigateBottom(BottomItem.Home) }
+                                )
+                            }
+                            composable(BottomItem.Cart.route) {
+                                MyCartScreen(
+                                    viewModel = cartViewModel,
+                                    onNavigateBottom = { navigateBottom(BottomItem.Home) }
+                                )
+                            }
 
-                        // PROFILE — usa ProfileRoute
-                        composable(BottomItem.Profile.route) {
-                            ProfileRoute(
-                                onNavigateBottom = { dest: BottomItem ->
-                                    navigateBottom(dest)
-                                },
-                                onOpenListing = { id: String ->
-                                    nav.navigate("listing/$id")
-                                },
-                                onSignOut = {
-                                    scope.launch {
-                                        // Si tienes un AuthRepository con logout(), ejecútalo aquí
-                                        runCatching {
-                                            val m = authRepo::class.java.methods
-                                                .firstOrNull { it.name == "logout" && it.parameterTypes.isEmpty() }
-                                            m?.invoke(authRepo)
+                            // PROFILE — usa ProfileRoute
+                            composable(BottomItem.Profile.route) {
+                                ProfileRoute(
+                                    onNavigateBottom = { dest: BottomItem ->
+                                        navigateBottom(dest)
+                                    },
+                                    onOpenListing = { id: String ->
+                                        nav.navigate("listing/$id")
+                                    },
+                                    onSignOut = {
+                                        scope.launch {
+                                            runCatching { authRepo.logout() }
+                                            sessionState = SessionState.NeedsAuth
+                                            nav.navigate("login") {
+                                                popUpTo(nav.graph.findStartDestination().id) { inclusive = true }
+                                                launchSingleTop = true
+                                            }
                                         }
-                                        nav.navigate("login") {
-                                            popUpTo(nav.graph.findStartDestination().id) { inclusive = true }
+                                    },
+                                    onOpenTelemetry = { sellerId: String ->
+                                        nav.navigate("telemetry/$sellerId") {
                                             launchSingleTop = true
+                                            restoreState = true
                                         }
                                     }
-                                },
-                                onOpenTelemetry = { sellerId: String ->
-                                    nav.navigate("telemetry/$sellerId") {
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
-                            )
-                        }
+                                )
+                            }
 
-                        composable("telemetry/{sellerId}") { backStackEntry ->
-                            val sellerId = backStackEntry.arguments?.getString("sellerId") ?: return@composable
-                            TelemetryRoute(
-                                sellerId = sellerId,
-                                onBack = { nav.popBackStack() }
-                            )
+                            composable("telemetry/{sellerId}") { backStackEntry ->
+                                val sellerId = backStackEntry.arguments?.getString("sellerId") ?: return@composable
+                                TelemetryRoute(
+                                    sellerId = sellerId,
+                                    onBack = { nav.popBackStack() }
+                                )
+                            }
                         }
                     }
                 }
@@ -301,6 +324,12 @@ class MainActivity : ComponentActivity() {
         )
         finish()
     }
+}
+
+private enum class SessionState {
+    Checking,
+    Authenticated,
+    NeedsAuth
 }
 
 @Composable
