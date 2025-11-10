@@ -1,22 +1,24 @@
 package com.techmarketplace.presentation.orders.view
 
+import android.app.Application
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DividerDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -29,17 +31,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.techmarketplace.core.designsystem.GreenDark
 import com.techmarketplace.core.ui.BottomItem
 import com.techmarketplace.core.ui.GreenScaffold
 import com.techmarketplace.data.storage.LocalOrder
-import com.techmarketplace.data.storage.MyOrdersStore
+import com.techmarketplace.presentation.orders.viewmodel.OrdersViewModel
 import java.text.DateFormat
 import java.text.NumberFormat
 import java.util.Currency
@@ -50,7 +54,11 @@ import java.util.Locale
 fun OrderScreen(
     onNavigateBottom: (BottomItem) -> Unit = {}
 ) {
-    val orders by MyOrdersStore.orders.collectAsState()
+    val context = LocalContext.current
+    val app = context.applicationContext as Application
+    val viewModel: OrdersViewModel = viewModel(factory = OrdersViewModel.factory(app))
+    val orders by viewModel.orders.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
 
     val numberFormat = remember { NumberFormat.getCurrencyInstance(Locale.getDefault()) }
     val dateFormat = remember {
@@ -61,6 +69,36 @@ fun OrderScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
+            if (uiState.isLoading) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+
+            uiState.infoMessage?.let { message ->
+                OrdersMessageCard(
+                    text = message,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+
+            uiState.errorMessage?.let { message ->
+                OrdersMessageCard(
+                    text = message,
+                    isError = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+
             OrdersHeader(orderCount = orders.size)
 
             Spacer(Modifier.height(16.dp))
@@ -89,6 +127,37 @@ fun OrderScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun OrdersMessageCard(
+    text: String,
+    modifier: Modifier = Modifier,
+    isError: Boolean = false
+) {
+    val (container, content) = remember(isError) {
+        if (isError) {
+            Color(0xFFFFEBEE) to Color(0xFFC62828)
+        } else {
+            Color(0xFFE3F2FD) to Color(0xFF0D47A1)
+        }
+    }
+
+    Surface(
+        modifier = modifier,
+        color = container,
+        contentColor = content,
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, content.copy(alpha = 0.24f)),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+        )
     }
 }
 
@@ -202,6 +271,50 @@ private fun OrderCard(
                     fontWeight = FontWeight.SemiBold
                 )
             }
+            .ifBlank { "Unknown" }
+    }
+
+    Surface(
+        modifier = modifier,
+        color = container,
+        contentColor = content,
+        shape = RoundedCornerShape(50),
+        border = BorderStroke(1.dp, content.copy(alpha = 0.32f)),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
+    ) {
+        Text(
+            text = displayText,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+        )
+    }
+}
+
+@Composable
+private fun ColumnScope.OrdersEmptyState(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(horizontal = 16.dp)
+        ) {
+            Text(
+                text = "No orders yet",
+                color = GreenDark,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 18.sp
+            )
+            Text(
+                text = "Place your first order from a product detail page to see it here.",
+                color = Color(0xFF607D8B),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }

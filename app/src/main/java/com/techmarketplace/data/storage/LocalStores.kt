@@ -2,7 +2,9 @@ package com.techmarketplace.data.storage
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class LocalOrder(
     val id: String,
     val listingId: String,
@@ -29,7 +31,11 @@ object MyOrdersStore {
         } else {
             current.add(o)
         }
-        _orders.value = current
+        setAll(current)
+    }
+
+    fun setAll(orders: List<LocalOrder>) {
+        _orders.value = orders
             .sortedByDescending { it.createdAtEpochMillis ?: Long.MIN_VALUE }
     }
 }
