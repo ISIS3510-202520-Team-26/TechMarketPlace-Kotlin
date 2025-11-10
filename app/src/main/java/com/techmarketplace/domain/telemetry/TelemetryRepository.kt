@@ -1,5 +1,6 @@
 package com.techmarketplace.domain.telemetry
 
+import com.techmarketplace.analytics.SearchTelemetryEvent
 import kotlinx.coroutines.flow.Flow
 
 interface TelemetryRepository {
@@ -10,4 +11,10 @@ interface TelemetryRepository {
     suspend fun refreshSellerResponseMetrics(sellerId: String)
 
     suspend fun isCacheExpired(sellerId: String, ttlMillis: Long): Boolean
+
+    suspend fun recordSearchEvent(event: SearchTelemetryEvent.FilterApplied)
+
+    fun observeFilterFrequencies(): Flow<Map<String, Int>>
+
+    suspend fun getFilterFrequencies(): Map<String, Int>
 }

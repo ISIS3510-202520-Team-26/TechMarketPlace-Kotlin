@@ -33,12 +33,14 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.techmarketplace.analytics.SearchTelemetryEvent
 import com.techmarketplace.core.ui.BottomBar
 import com.techmarketplace.core.ui.BottomItem
 import com.techmarketplace.data.remote.ApiClient
 import com.techmarketplace.data.remote.api.ImagesApi
 import com.techmarketplace.data.remote.dto.SearchListingsResponse
 import com.techmarketplace.data.repository.ListingsRepository
+import com.techmarketplace.data.repository.TelemetryRepositoryImpl
 import com.techmarketplace.data.storage.LocationStore
 import com.techmarketplace.data.storage.getAndSaveLocation
 import com.techmarketplace.data.storage.HomeFeedCacheStore
@@ -84,6 +86,7 @@ fun HomeRoute(
             homeFeedCacheStore = homeFeedCacheStore
         )
     }
+    val telemetryRepository = remember(context) { TelemetryRepositoryImpl.create(context) }
 
     // Ranking local de clicks por categoría
     val clickStore = remember { CategoryClickStore(context) }
@@ -98,6 +101,20 @@ fun HomeRoute(
             .replace("http://127.0.0.1", "http://10.0.2.2")
     }
     fun fixEmulatorHost(url: String?): String? = url?.let { emulatorize(it) }
+
+    fun currentFilterKeys(categoryId: String?, nearEnabled: Boolean, radiusKm: Float): Set<String> = buildSet {
+        categoryId?.takeIf { it.isNotBlank() }?.let { add("category:$it") }
+        if (nearEnabled) {
+            add("near:${radiusKm.toInt()}km")
+        }
+    }
+
+    fun emitFilterTelemetry(categoryId: String?, nearEnabled: Boolean, radiusKm: Float) {
+        val filters = currentFilterKeys(categoryId, nearEnabled, radiusKm)
+        scope.launch {
+            telemetryRepository.recordSearchEvent(SearchTelemetryEvent.FilterApplied(filters))
+        }
+    }
 
     fun publicFromObjectKey(objectKey: String): String {
         val base = if (MINIO_PUBLIC_BASE.endsWith("/")) MINIO_PUBLIC_BASE else "$MINIO_PUBLIC_BASE/"
@@ -337,12 +354,14 @@ fun HomeRoute(
             categories = orderedCategories,
             selectedCategoryId = selectedCat,
             onSelectCategory = { id ->
-                selectedCat = id.takeIf { it.isNotBlank() }
+                val normalized = id.takeIf { it.isNotBlank() }
+                selectedCat = normalized
                 if (id.isNotBlank()) {
                     scope.launch { clickStore.increment(id) }
                     val name = orderedCategories.firstOrNull { it.id == id }?.name
                     LoginTelemetry.fireCategoryClick(id, name ?: "—")
                 }
+                emitFilterTelemetry(normalized, nearEnabled, radiusKm)
             },
             query = query,
             onQueryChange = { query = it },
@@ -375,9 +394,20 @@ fun HomeRoute(
             lat = lat,
             lon = lon,
             nearEnabled = nearEnabled,
-            onToggleNear = { nearEnabled = it },
+            onToggleNear = {
+                nearEnabled = it
+                emitFilterTelemetry(selectedCat, it, radiusKm)
+            },
             radiusKm = radiusKm,
-            onRadiusChange = { radiusKm = it.coerceIn(1f, 50f) }
+            onRadiusChange = {
+                val coerced = it.coerceIn(1f, 50f)
+                radiusKm = coerced
+                if (nearEnabled) {
+                    emitFilterTelemetry(selectedCat, nearEnabled, coerced)
+                } else {
+                    emitFilterTelemetry(selectedCat, false, coerced)
+                }
+            }
         )
 
         Column(modifier = Modifier.align(Alignment.BottomCenter)) {
