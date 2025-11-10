@@ -11,11 +11,14 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.techmarketplace.data.remote.ApiClient
 import com.techmarketplace.data.remote.dto.CatalogItemDto
+import com.techmarketplace.analytics.ListingTelemetryEvent
 import com.techmarketplace.data.repository.ListingsRepository
 import com.techmarketplace.data.repository.ListingImagesRepository
+import com.techmarketplace.data.repository.TelemetryRepositoryImpl
 import com.techmarketplace.data.storage.HomeFeedCacheStore
 import com.techmarketplace.data.storage.LocationStore
 import com.techmarketplace.data.telemetry.LoginTelemetry
+import com.techmarketplace.domain.telemetry.TelemetryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,7 +39,8 @@ data class CatalogsState(
 class ListingsViewModel(
     app: Application,
     private val repo: ListingsRepository,
-    private val imagesRepo: ListingImagesRepository
+    private val imagesRepo: ListingImagesRepository,
+    private val telemetryRepository: TelemetryRepository
 ) : AndroidViewModel(app) {
 
     private val _catalogs = MutableStateFlow(CatalogsState())
@@ -120,6 +124,23 @@ class ListingsViewModel(
                     Log.w(TAG, "listing.created telemetry failed: ${t.message}")
                 }
 
+                val createdAtIso = detail.createdAt
+                val createdAt = createdAtIso?.let { iso ->
+                    runCatching { java.time.Instant.parse(iso) }.getOrElse { java.time.Instant.now() }
+                } ?: java.time.Instant.now()
+
+                runCatching {
+                    telemetryRepository.recordListingCreated(
+                        ListingTelemetryEvent.ListingCreated(
+                            listingId = detail.id,
+                            categoryId = safeCategoryId,
+                            createdAt = createdAt
+                        )
+                    )
+                }.onFailure { t ->
+                    Log.w(TAG, "analytics listing.created failed: ${t.message}")
+                }
+
                 // 3) subir imagen (si hay)
                 if (imageData != null) {
                     try {
@@ -161,7 +182,8 @@ class ListingsViewModel(
                     homeFeedCacheStore = HomeFeedCacheStore(app)
                 )
                 val imagesRepository = ListingImagesRepository(imagesApi)
-                return ListingsViewModel(app, repository, imagesRepository) as T
+                val telemetryRepository = TelemetryRepositoryImpl.create(app)
+                return ListingsViewModel(app, repository, imagesRepository, telemetryRepository) as T
             }
         }
     }
