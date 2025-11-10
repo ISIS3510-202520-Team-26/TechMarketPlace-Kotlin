@@ -271,6 +271,50 @@ private fun OrderCard(
                     fontWeight = FontWeight.SemiBold
                 )
             }
+            .ifBlank { "Unknown" }
+    }
+
+    Surface(
+        modifier = modifier,
+        color = container,
+        contentColor = content,
+        shape = RoundedCornerShape(50),
+        border = BorderStroke(1.dp, content.copy(alpha = 0.32f)),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
+    ) {
+        Text(
+            text = displayText,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+        )
+    }
+}
+
+@Composable
+private fun ColumnScope.OrdersEmptyState(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(horizontal = 16.dp)
+        ) {
+            Text(
+                text = "No orders yet",
+                color = GreenDark,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 18.sp
+            )
+            Text(
+                text = "Place your first order from a product detail page to see it here.",
+                color = Color(0xFF607D8B),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
