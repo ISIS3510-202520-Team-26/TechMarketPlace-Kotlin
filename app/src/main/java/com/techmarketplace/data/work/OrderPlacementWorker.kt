@@ -14,10 +14,12 @@ import com.techmarketplace.data.storage.LocalOrder
 import com.techmarketplace.data.storage.MyOrdersStore
 import com.techmarketplace.data.storage.cart.CartLocalDataSource
 import com.techmarketplace.data.storage.dao.CartDatabaseProvider
+import com.techmarketplace.data.storage.dao.CartItemEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import retrofit2.HttpException
 import org.json.JSONObject
+import retrofit2.HttpException
+import java.time.Instant
 
 class OrderPlacementWorker(
     appContext: Context,
@@ -51,7 +53,7 @@ class OrderPlacementWorker(
                                 currency = entity.currency
                             )
                         )
-                        MyOrdersStore.add(created.toLocalOrder())
+                        MyOrdersStore.add(created.toLocalOrder(entity))
                         local.removeById(entity.cartItemId, markPending = false)
                     } catch (http: HttpException) {
                         if (http.code() >= 500 || http.code() == 429) throw http
@@ -100,13 +102,23 @@ class OrderPlacementWorker(
     }
 }
 
-private fun OrderOut.toLocalOrder(): LocalOrder = LocalOrder(
-    id = id,
-    listingId = listingId,
-    totalCents = totalCents,
-    currency = currency,
-    status = status
-)
+private fun OrderOut.toLocalOrder(source: CartItemEntity): LocalOrder {
+    val createdAtMillis = createdAt?.let { iso ->
+        runCatching { Instant.parse(iso).toEpochMilli() }.getOrNull()
+    }
+
+    return LocalOrder(
+        id = id,
+        listingId = listingId,
+        listingTitle = source.title.ifBlank { "Listing ${listingId.take(8)}" },
+        quantity = source.quantity,
+        totalCents = totalCents,
+        currency = currency,
+        status = status,
+        createdAtEpochMillis = createdAtMillis,
+        thumbnailUrl = source.thumbnailUrl
+    )
+}
 
 private fun HttpException.readErrorDetail(): String? = try {
     response()?.errorBody()?.charStream()?.use { stream ->
