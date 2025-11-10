@@ -2,8 +2,20 @@ package com.techmarketplace.data.storage
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.serialization.Serializable
 
-data class LocalOrder(val id: String, val listingId: String, val totalCents: Int, val currency: String, val status: String)
+@Serializable
+data class LocalOrder(
+    val id: String,
+    val listingId: String,
+    val listingTitle: String,
+    val quantity: Int,
+    val totalCents: Int,
+    val currency: String,
+    val status: String,
+    val createdAtEpochMillis: Long?,
+    val thumbnailUrl: String?
+)
 data class LocalPayment(val orderId: String, val action: String, val at: Long)
 data class LocalTelemetry(val type: String, val props: String, val at: Long)
 
@@ -19,7 +31,12 @@ object MyOrdersStore {
         } else {
             current.add(o)
         }
-        _orders.value = current
+        setAll(current)
+    }
+
+    fun setAll(orders: List<LocalOrder>) {
+        _orders.value = orders
+            .sortedByDescending { it.createdAtEpochMillis ?: Long.MIN_VALUE }
     }
 }
 
