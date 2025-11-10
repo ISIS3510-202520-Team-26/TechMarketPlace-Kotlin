@@ -14,10 +14,13 @@ import com.techmarketplace.data.storage.LocalOrder
 import com.techmarketplace.data.storage.MyOrdersStore
 import com.techmarketplace.data.storage.cart.CartLocalDataSource
 import com.techmarketplace.data.storage.dao.CartDatabaseProvider
+import com.techmarketplace.data.storage.dao.CartItemEntity
+import com.techmarketplace.data.storage.orders.OrdersLocalDataSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import retrofit2.HttpException
 import org.json.JSONObject
+import retrofit2.HttpException
+import java.time.Instant
 
 class OrderPlacementWorker(
     appContext: Context,
@@ -28,6 +31,7 @@ class OrderPlacementWorker(
         val context = applicationContext
         val database = CartDatabaseProvider.get(context)
         val local = CartLocalDataSource(database.cartDao(), CartPreferences(context))
+        val ordersLocal = OrdersLocalDataSource(context)
 
         return withContext(Dispatchers.IO) {
             val items = local.getActive()
@@ -51,7 +55,9 @@ class OrderPlacementWorker(
                                 currency = entity.currency
                             )
                         )
-                        MyOrdersStore.add(created.toLocalOrder())
+                        val localOrder = created.toLocalOrder(entity)
+                        MyOrdersStore.add(localOrder)
+                        ordersLocal.upsert(localOrder)
                         local.removeById(entity.cartItemId, markPending = false)
                     } catch (http: HttpException) {
                         if (http.code() >= 500 || http.code() == 429) throw http
@@ -100,13 +106,31 @@ class OrderPlacementWorker(
     }
 }
 
-private fun OrderOut.toLocalOrder(): LocalOrder = LocalOrder(
-    id = id,
-    listingId = listingId,
-    totalCents = totalCents,
-    currency = currency,
-    status = status
-)
+private fun OrderOut.toLocalOrder(source: CartItemEntity): LocalOrder {
+    val createdAtMillis = createdAt?.let { iso ->
+        runCatching { Instant.parse(iso).toEpochMilli() }.getOrNull()
+    }
+
+    val resolvedTitle = when {
+        !listingTitle.isNullOrBlank() -> listingTitle
+        source.title.isNotBlank() -> source.title
+        else -> "Listing ${listingId.take(8)}"
+    }
+
+    val resolvedThumbnail = listingThumbnailUrl ?: source.thumbnailUrl
+
+    return LocalOrder(
+        id = id,
+        listingId = listingId,
+        listingTitle = resolvedTitle,
+        quantity = quantity ?: source.quantity,
+        totalCents = totalCents,
+        currency = currency,
+        status = status,
+        createdAtEpochMillis = createdAtMillis,
+        thumbnailUrl = resolvedThumbnail
+    )
+}
 
 private fun HttpException.readErrorDetail(): String? = try {
     response()?.errorBody()?.charStream()?.use { stream ->
