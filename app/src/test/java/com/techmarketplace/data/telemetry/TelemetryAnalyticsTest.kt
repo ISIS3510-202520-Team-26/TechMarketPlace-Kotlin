@@ -1,6 +1,9 @@
 package com.techmarketplace.data.telemetry
 
+import com.techmarketplace.analytics.ListingTelemetryEvent
 import com.techmarketplace.analytics.SearchTelemetryEvent
+import java.time.Instant
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -31,5 +34,37 @@ class TelemetryAnalyticsTest {
         val counts = TelemetryAnalytics.filterFrequency(events)
 
         assertEquals(mapOf("category:phones" to 1), counts)
+    }
+
+    @Test
+    fun listingCreatedDailyCounts_groups_by_day_and_category() {
+        val events = listOf(
+            ListingTelemetryEvent.ListingCreated(
+                listingId = "listing-1",
+                categoryId = "phones",
+                createdAt = Instant.parse("2024-03-01T10:15:30Z")
+            ),
+            ListingTelemetryEvent.ListingCreated(
+                listingId = "listing-2",
+                categoryId = "phones",
+                createdAt = Instant.parse("2024-03-01T23:59:59Z")
+            ),
+            ListingTelemetryEvent.ListingCreated(
+                listingId = "listing-3",
+                categoryId = "laptops",
+                createdAt = Instant.parse("2024-03-02T00:00:01Z")
+            ),
+            ListingTelemetryEvent.ListingCreated(
+                listingId = "listing-4",
+                categoryId = "",
+                createdAt = Instant.parse("2024-03-02T12:00:00Z")
+            )
+        )
+
+        val counts = TelemetryAnalytics.listingCreatedDailyCounts(events)
+
+        assertEquals(2, counts[LocalDate.parse("2024-03-01")]?.get("phones"))
+        assertEquals(1, counts[LocalDate.parse("2024-03-02")]?.get("laptops"))
+        assertEquals(1, counts[LocalDate.parse("2024-03-02")]?.get("unknown"))
     }
 }

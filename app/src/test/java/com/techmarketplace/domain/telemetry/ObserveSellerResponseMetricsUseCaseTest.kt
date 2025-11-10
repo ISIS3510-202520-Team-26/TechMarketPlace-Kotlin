@@ -1,5 +1,6 @@
 package com.techmarketplace.domain.telemetry
 
+import com.techmarketplace.analytics.ListingTelemetryEvent
 import com.techmarketplace.analytics.SearchTelemetryEvent
 import com.techmarketplace.core.data.Resource
 import java.io.IOException
@@ -107,6 +108,15 @@ private class FakeTelemetryRepository : TelemetryRepository {
     override fun observeFilterFrequencies(): Flow<Map<String, Int>> = MutableStateFlow(emptyMap())
 
     override suspend fun getFilterFrequencies(): Map<String, Int> = emptyMap()
+
+    override suspend fun recordListingCreated(event: ListingTelemetryEvent.ListingCreated) {
+        // no-op for tests
+    }
+
+    override fun observeListingCreatedDailyCounts(): Flow<Map<java.time.LocalDate, Map<String, Int>>> =
+        MutableStateFlow(emptyMap())
+
+    override suspend fun getListingCreatedDailyCounts(): Map<java.time.LocalDate, Map<String, Int>> = emptyMap()
 }
 
 private fun sampleMetrics(fetchedAt: Long): SellerResponseMetrics = SellerResponseMetrics(
