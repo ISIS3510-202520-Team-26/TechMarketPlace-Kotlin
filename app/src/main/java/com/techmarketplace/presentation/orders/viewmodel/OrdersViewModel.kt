@@ -1,6 +1,7 @@
 package com.techmarketplace.presentation.orders.viewmodel
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -68,20 +69,18 @@ class OrdersViewModel(
                 }
 
                 is OrdersSyncResult.CachedSuccess -> {
-                    val message = result.cause.localizedMessage?.takeIf { it.isNotBlank() }
+                    Log.w(TAG, "Falling back to cached orders", result.cause)
                     _uiState.value = OrdersUiState(
                         isLoading = false,
-                        infoMessage = message?.let { "Showing cached orders (last error: $it)" }
-                            ?: "You're viewing cached orders while offline.",
-                        errorMessage = null
+                        infoMessage = "You're viewing cached orders. We'll sync them once you're back online.",
                     )
                 }
 
                 is OrdersSyncResult.Failure -> {
-                    val message = result.cause.localizedMessage?.takeIf { it.isNotBlank() }
+                    Log.e(TAG, "Unable to load orders", result.cause)
                     _uiState.value = OrdersUiState(
                         isLoading = false,
-                        errorMessage = message ?: "We couldn't load your orders. Please try again later."
+                        errorMessage = "We couldn't load your orders. Please try again later."
                     )
                 }
             }
@@ -99,6 +98,7 @@ class OrdersViewModel(
                 return OrdersViewModel(app, connectivity, ordersApi, listingApi, localDataSource) as T
             }
         }
+        private const val TAG = "OrdersViewModel"
     }
 }
 
