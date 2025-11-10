@@ -292,278 +292,297 @@ private fun OrderCard(
                     fontWeight = FontWeight.SemiBold
                 )
             }
-            .ifBlank { "Unknown" }
-    }
+                .ifBlank { "Unknown" }
+        }
 
-    Surface(
-        modifier = modifier,
-        color = container,
-        contentColor = content,
-        shape = RoundedCornerShape(50),
-        border = BorderStroke(1.dp, content.copy(alpha = 0.32f)),
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp
-    ) {
-        Text(
-            text = displayText,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-        )
-    }
-}
-
-@Composable
-private fun ColumnScope.OrdersEmptyState(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(horizontal = 16.dp)
+        Surface(
+            modifier = modifier,
+            color = container,
+            contentColor = content,
+            shape = RoundedCornerShape(50),
+            border = BorderStroke(1.dp, content.copy(alpha = 0.32f)),
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp
         ) {
             Text(
-                text = "No orders yet",
-                color = GreenDark,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 18.sp
-            )
-            Text(
-                text = "Place your first order from a product detail page to see it here.",
-                color = Color(0xFF607D8B),
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center
+                text = displayText,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
             )
         }
     }
-}
 
-@Composable
-private fun OrderThumbnail(url: String?, title: String) {
-    val initials = remember(title) {
-        title
-            .split(" ")
-            .firstOrNull { it.isNotBlank() }
-            ?.firstOrNull()
-            ?.uppercaseChar()
-            ?.toString()
-            ?: "?"
-    }
-
-    if (url.isNullOrBlank()) {
-        Surface(
-            modifier = Modifier.size(64.dp),
-            color = Color(0xFFE0E0E0),
-            shape = RoundedCornerShape(12.dp)
+    @Composable
+    private fun ColumnScope.OrdersEmptyState(modifier: Modifier = Modifier) {
+        Box(
+            modifier = modifier,
+            contentAlignment = Alignment.Center
         ) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(horizontal = 16.dp)
+            ) {
                 Text(
-                    text = initials,
+                    text = "No orders yet",
                     color = GreenDark,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 18.sp
                 )
+                Text(
+                    text = "Place your first order from a product detail page to see it here.",
+                    color = Color(0xFF607D8B),
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center
+                )
             }
         }
-    } else {
-        AsyncImage(
-            model = url,
-            contentDescription = title,
-            modifier = Modifier
-                .size(64.dp)
-                .clip(RoundedCornerShape(12.dp)),
-            contentScale = ContentScale.Crop
-        )
     }
-}
 
-@Composable
-private fun StatusChip(status: String, modifier: Modifier = Modifier) {
-    val normalized = remember(status) { status.lowercase(Locale.getDefault()) }
-    val (container, content) = remember(normalized) {
-        when {
-            normalized.contains("complete") || normalized.contains("success") || normalized.contains("delivered") ->
-                Color(0xFFDEF5EA) to GreenDark
-            normalized.contains("pending") || normalized.contains("processing") || normalized.contains("waiting") ->
-                Color(0xFFFFF3E0) to Color(0xFFB36B00)
-            normalized.contains("cancel") || normalized.contains("fail") || normalized.contains("reject") ->
-                Color(0xFFFFEBEE) to Color(0xFFC62828)
-            else -> Color(0xFFE3F2FD) to Color(0xFF1565C0)
+    @Composable
+    private fun OrderThumbnail(url: String?, title: String) {
+        val initials = remember(title) {
+            title
+                .split(" ")
+                .firstOrNull { it.isNotBlank() }
+                ?.firstOrNull()
+                ?.uppercaseChar()
+                ?.toString()
+                ?: "?"
         }
-    }
 
-    val displayText = remember(status) {
-        status
-            .replace('_', ' ')
-            .replace('-', ' ')
-            .lowercase(Locale.getDefault())
-            .split(" ")
-            .filter { it.isNotBlank() }
-            .joinToString(" ") { word ->
-                word.replaceFirstChar { char ->
-                    if (char.isLowerCase()) char.titlecase(Locale.getDefault()) else char.toString()
+        if (url.isNullOrBlank()) {
+            Surface(
+                modifier = Modifier.size(64.dp),
+                color = Color(0xFFE0E0E0),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = initials,
+                        color = GreenDark,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 18.sp
+                    )
                 }
             }
-            .ifBlank { "Unknown" }
-    }
-
-    Surface(
-        modifier = modifier,
-        color = container,
-        contentColor = content,
-        shape = RoundedCornerShape(50),
-        border = BorderStroke(1.dp, content.copy(alpha = 0.32f)),
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp
-    ) {
-        Text(
-            text = displayText,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-        )
-    }
-}
-
-@Composable
-private fun ColumnScope.OrdersEmptyState(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(horizontal = 16.dp)
-        ) {
-            Text(
-                text = "No orders yet",
-                color = GreenDark,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 18.sp
-            )
-            Text(
-                text = "Place your first order from a product detail page to see it here.",
-                color = Color(0xFF607D8B),
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center
+        } else {
+            AsyncImage(
+                model = url,
+                contentDescription = title,
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(RoundedCornerShape(12.dp)),
+                contentScale = ContentScale.Crop
             )
         }
     }
-}
 
-@Composable
-private fun OrderThumbnail(url: String?, title: String) {
-    val initials = remember(title) {
-        title
-            .split(" ")
-            .firstOrNull { it.isNotBlank() }
-            ?.firstOrNull()
-            ?.uppercaseChar()
-            ?.toString()
-            ?: "?"
+    @Composable
+    private fun StatusChip(status: String, modifier: Modifier = Modifier) {
+        val normalized = remember(status) { status.lowercase(Locale.getDefault()) }
+        val (container, content) = remember(normalized) {
+            when {
+                normalized.contains("complete") || normalized.contains("success") || normalized.contains(
+                    "delivered"
+                ) ->
+                    Color(0xFFDEF5EA) to GreenDark
+
+                normalized.contains("pending") || normalized.contains("processing") || normalized.contains(
+                    "waiting"
+                ) ->
+                    Color(0xFFFFF3E0) to Color(0xFFB36B00)
+
+                normalized.contains("cancel") || normalized.contains("fail") || normalized.contains(
+                    "reject"
+                ) ->
+                    Color(0xFFFFEBEE) to Color(0xFFC62828)
+
+                else -> Color(0xFFE3F2FD) to Color(0xFF1565C0)
+            }
+        }
+
+        val displayText = remember(status) {
+            status
+                .replace('_', ' ')
+                .replace('-', ' ')
+                .lowercase(Locale.getDefault())
+                .split(" ")
+                .filter { it.isNotBlank() }
+                .joinToString(" ") { word ->
+                    word.replaceFirstChar { char ->
+                        if (char.isLowerCase()) char.titlecase(Locale.getDefault()) else char.toString()
+                    }
+                }
+                .ifBlank { "Unknown" }
+        }
+
+        Surface(
+            modifier = modifier,
+            color = container,
+            contentColor = content,
+            shape = RoundedCornerShape(50),
+            border = BorderStroke(1.dp, content.copy(alpha = 0.32f)),
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp
+        ) {
+            Text(
+                text = displayText,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+            )
+        }
     }
 
-    if (url.isNullOrBlank()) {
-        Surface(
-            modifier = Modifier.size(64.dp),
-            color = Color(0xFFE0E0E0),
-            shape = RoundedCornerShape(12.dp)
+    @Composable
+    private fun ColumnScope.OrdersEmptyState(modifier: Modifier = Modifier) {
+        Box(
+            modifier = modifier,
+            contentAlignment = Alignment.Center
         ) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(horizontal = 16.dp)
+            ) {
                 Text(
-                    text = initials,
+                    text = "No orders yet",
                     color = GreenDark,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 18.sp
                 )
+                Text(
+                    text = "Place your first order from a product detail page to see it here.",
+                    color = Color(0xFF607D8B),
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center
+                )
             }
         }
-    } else {
-        AsyncImage(
-            model = url,
-            contentDescription = title,
-            modifier = Modifier
-                .size(64.dp)
-                .clip(RoundedCornerShape(12.dp)),
-            contentScale = ContentScale.Crop
-        )
     }
-}
 
-@Composable
-private fun StatusChip(status: String, modifier: Modifier = Modifier) {
-    val normalized = remember(status) { status.lowercase(Locale.getDefault()) }
-    val (container, content) = remember(normalized) {
-        when {
-            normalized.contains("complete") || normalized.contains("success") || normalized.contains("delivered") ->
-                Color(0xFFDEF5EA) to GreenDark
-            normalized.contains("pending") || normalized.contains("processing") || normalized.contains("waiting") ->
-                Color(0xFFFFF3E0) to Color(0xFFB36B00)
-            normalized.contains("cancel") || normalized.contains("fail") || normalized.contains("reject") ->
-                Color(0xFFFFEBEE) to Color(0xFFC62828)
-            else -> Color(0xFFE3F2FD) to Color(0xFF1565C0)
+    @Composable
+    private fun OrderThumbnail(url: String?, title: String) {
+        val initials = remember(title) {
+            title
+                .split(" ")
+                .firstOrNull { it.isNotBlank() }
+                ?.firstOrNull()
+                ?.uppercaseChar()
+                ?.toString()
+                ?: "?"
         }
-    }
 
-    val displayText = remember(status) {
-        status
-            .replace('_', ' ')
-            .replace('-', ' ')
-            .lowercase(Locale.getDefault())
-            .split(" ")
-            .filter { it.isNotBlank() }
-            .joinToString(" ") { word ->
-                word.replaceFirstChar { char ->
-                    if (char.isLowerCase()) char.titlecase(Locale.getDefault()) else char.toString()
+        if (url.isNullOrBlank()) {
+            Surface(
+                modifier = Modifier.size(64.dp),
+                color = Color(0xFFE0E0E0),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = initials,
+                        color = GreenDark,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 18.sp
+                    )
                 }
             }
-            .ifBlank { "Unknown" }
+        } else {
+            AsyncImage(
+                model = url,
+                contentDescription = title,
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(RoundedCornerShape(12.dp)),
+                contentScale = ContentScale.Crop
+            )
+        }
     }
 
-    Surface(
-        modifier = modifier,
-        color = container,
-        contentColor = content,
-        shape = RoundedCornerShape(50),
-        border = BorderStroke(1.dp, content.copy(alpha = 0.32f)),
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp
-    ) {
-        Text(
-            text = displayText,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-        )
-    }
-}
+    @Composable
+    private fun StatusChip(status: String, modifier: Modifier = Modifier) {
+        val normalized = remember(status) { status.lowercase(Locale.getDefault()) }
+        val (container, content) = remember(normalized) {
+            when {
+                normalized.contains("complete") || normalized.contains("success") || normalized.contains(
+                    "delivered"
+                ) ->
+                    Color(0xFFDEF5EA) to GreenDark
 
-@Composable
-private fun ColumnScope.OrdersEmptyState(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(horizontal = 16.dp)
+                normalized.contains("pending") || normalized.contains("processing") || normalized.contains(
+                    "waiting"
+                ) ->
+                    Color(0xFFFFF3E0) to Color(0xFFB36B00)
+
+                normalized.contains("cancel") || normalized.contains("fail") || normalized.contains(
+                    "reject"
+                ) ->
+                    Color(0xFFFFEBEE) to Color(0xFFC62828)
+
+                else -> Color(0xFFE3F2FD) to Color(0xFF1565C0)
+            }
+        }
+
+        val displayText = remember(status) {
+            status
+                .replace('_', ' ')
+                .replace('-', ' ')
+                .lowercase(Locale.getDefault())
+                .split(" ")
+                .filter { it.isNotBlank() }
+                .joinToString(" ") { word ->
+                    word.replaceFirstChar { char ->
+                        if (char.isLowerCase()) char.titlecase(Locale.getDefault()) else char.toString()
+                    }
+                }
+                .ifBlank { "Unknown" }
+        }
+
+        Surface(
+            modifier = modifier,
+            color = container,
+            contentColor = content,
+            shape = RoundedCornerShape(50),
+            border = BorderStroke(1.dp, content.copy(alpha = 0.32f)),
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp
         ) {
             Text(
-                text = "No orders yet",
-                color = GreenDark,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 18.sp
+                text = displayText,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
             )
-            Text(
-                text = "Place your first order from a product detail page to see it here.",
-                color = Color(0xFF607D8B),
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center
-            )
+        }
+    }
+
+    @Composable
+    private fun ColumnScope.OrdersEmptyState(modifier: Modifier = Modifier) {
+        Box(
+            modifier = modifier,
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(horizontal = 16.dp)
+            ) {
+                Text(
+                    text = "No orders yet",
+                    color = GreenDark,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 18.sp
+                )
+                Text(
+                    text = "Place your first order from a product detail page to see it here.",
+                    color = Color(0xFF607D8B),
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     }
 }
