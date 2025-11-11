@@ -1,26 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Red / backend -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- Ubicación (precisa y aproximada) -->
+    <!-- Ubicación (no obligatoria para ver el mapa, pero ok si ya la usas) -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
-    <!-- Cámara (para usar ACTION_IMAGE_CAPTURE con FileProvider) -->
-    <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- Cámara -->
+    <uses-permission android:name="android.permission.CAMERA" />
 
-    <!-- (Opcional) el dispositivo puede tener GPS, pero no lo exigimos para instalar -->
-    <uses-feature
-        android:name="android.hardware.location.gps"
-        android:required="false" />
-    <uses-feature
-        android:name="android.hardware.camera"
-        android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
         android:name=".app.TMApp"
@@ -36,6 +30,11 @@
         android:theme="@style/Theme.TechMarketPlace"
         tools:targetApi="31">
 
+        <!-- ✅ API key de Google Maps: DIRECTO dentro de <application> -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${MAPS_API_KEY}" />
+
         <activity
             android:name=".app.MainActivity"
             android:exported="true">
@@ -45,7 +44,7 @@
             </intent-filter>
         </activity>
 
-        <!-- FileProvider para capturar imágenes con la cámara -->
+        <!-- FileProvider para cámara -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -56,6 +55,6 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-        <!-- Si usas google-services, sus <meta-data> se fusionan automáticamente -->
+        <!-- (Si usas google-services, sus <meta-data> se fusionan solos) -->
     </application>
 </manifest>
