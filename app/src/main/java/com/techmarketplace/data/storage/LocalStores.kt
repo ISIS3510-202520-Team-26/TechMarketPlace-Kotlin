@@ -1,5 +1,6 @@
 package com.techmarketplace.data.storage
 
+import com.techmarketplace.domain.cart.CartVariantDetail
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
@@ -11,7 +12,12 @@ data class LocalOrder(
     val totalCents: Int,
     val currency: String,
     val status: String,
-    val createdAt: String? = null
+    val createdAt: String? = null,
+    val title: String? = null,
+    val quantity: Int = 1,
+    val unitPriceCents: Int? = null,
+    val thumbnailUrl: String? = null,
+    val variantDetails: List<CartVariantDetail> = emptyList()
 )
 data class LocalPayment(val orderId: String, val action: String, val at: Long)
 data class LocalTelemetry(val type: String, val props: String, val at: Long)

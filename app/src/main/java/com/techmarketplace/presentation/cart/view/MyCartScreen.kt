@@ -59,6 +59,8 @@ import com.techmarketplace.presentation.cart.viewmodel.CartViewModel.CartEvent
 import coil.compose.AsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
+import com.techmarketplace.presentation.common.ui.cacheKeyFrom
+import com.techmarketplace.presentation.common.ui.formatPrice
 import java.text.DateFormat
 import java.util.Locale
 
@@ -269,9 +271,9 @@ private fun CartRow(
                     if (!item.thumbnailUrl.isNullOrBlank()) {
                         val model = remember(item.thumbnailUrl) {
                             val key = cacheKeyFrom(item.thumbnailUrl)
-                            ImageRequest.Builder(context)
-                                .data(item.thumbnailUrl)
-                                .memoryCacheKey(key)
+                                ImageRequest.Builder(context)
+                                    .data(item.thumbnailUrl)
+                                    .memoryCacheKey(key)
                                 .diskCacheKey(key)
                                 .allowHardware(false)
                                 .diskCachePolicy(CachePolicy.ENABLED)
@@ -404,18 +406,5 @@ private fun RoundIconBell() {
         Box(Modifier.size(40.dp))
     }
 }
-
-private fun formatPrice(priceCents: Int, currency: String): String {
-    val locale = Locale.getDefault()
-    val normalizedCurrency = currency.takeIf { it.isNotBlank() }?.uppercase(locale)
-    val formatted = String.format(locale, "%,d", priceCents)
-    return when (normalizedCurrency) {
-        null -> formatted
-        "USD" -> "$$formatted"
-        else -> "$normalizedCurrency $formatted"
-    }
-}
-
-private fun cacheKeyFrom(url: String): String = url.substringBefore('?')
 
 

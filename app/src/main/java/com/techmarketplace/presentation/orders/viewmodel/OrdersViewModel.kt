@@ -88,8 +88,11 @@ class OrdersViewModel(
     }
 
     private fun Throwable.toUserMessage(): String = when (this) {
-        is HttpException -> extractDetailMessage()?.ifBlank { null }
-            ?: "We couldn't refresh your orders right now."
+        is HttpException -> when {
+            code() == 405 -> "This server doesn't expose order history yet. Please add a GET /orders endpoint."
+            else -> extractDetailMessage()?.ifBlank { null }
+                ?: "We couldn't refresh your orders right now."
+        }
         is IOException -> "Connection issue – showing saved orders."
         else -> "Something went wrong while loading your orders."
     }
@@ -100,7 +103,11 @@ class OrdersViewModel(
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 val connectivity = ConnectivityObserver.observe(app)
                 val cache = OrdersCacheStore(app)
-                val repository = OrdersRepository(ApiClient.ordersApi(), cache)
+                val repository = OrdersRepository(
+                    api = ApiClient.ordersApi(),
+                    listingsApi = ApiClient.listingApi(),
+                    cache = cache
+                )
                 return OrdersViewModel(app, repository, connectivity) as T
             }
         }

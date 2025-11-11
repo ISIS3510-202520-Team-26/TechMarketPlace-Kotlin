@@ -1,21 +1,24 @@
 package com.techmarketplace.presentation.orders.view
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DividerDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,9 +37,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.ColorPainter
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
+import com.techmarketplace.core.designsystem.GreenDark
 import com.techmarketplace.data.storage.LocalOrder
+import com.techmarketplace.presentation.common.ui.cacheKeyFrom
+import com.techmarketplace.presentation.common.ui.formatPrice
 import com.techmarketplace.presentation.orders.viewmodel.OrdersUiState
 import com.techmarketplace.presentation.orders.viewmodel.OrdersViewModel
 import java.text.DateFormat
@@ -44,7 +59,6 @@ import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.time.ZoneId
-import java.util.Currency
 import java.util.Date
 import java.util.Locale
 
@@ -181,44 +195,149 @@ private fun EmptyOrdersPlaceholder(modifier: Modifier = Modifier) {
 
 @Composable
 private fun OrderCard(order: LocalOrder, modifier: Modifier = Modifier) {
-    val totalLabel = remember(order.totalCents, order.currency) {
-        formatCurrency(order.totalCents, order.currency)
+    val context = LocalContext.current
+    val unitPriceLabel = remember(order.unitPriceCents, order.currency, order.totalCents) {
+        val cents = order.unitPriceCents ?: order.totalCents
+        formatPrice(cents, order.currency)
     }
-    val createdLabel = remember(order.createdAt) {
-        formatOrderCreatedAt(order.createdAt)
+    val totalLabel = remember(order.totalCents, order.currency) {
+        formatPrice(order.totalCents, order.currency)
+    }
+    val createdLabel = remember(order.createdAt) { formatOrderCreatedAt(order.createdAt) }
+    val variantSummary = remember(order.variantDetails) {
+        order.variantDetails.takeIf { it.isNotEmpty() }
+            ?.joinToString { "${it.name}: ${it.value}" }
     }
 
-    Card(
+    Surface(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors()
+        shape = RoundedCornerShape(20.dp),
+        color = Color(0xFFF5F5F5),
+        shadowElevation = 0.dp,
+        tonalElevation = 0.dp,
+        border = BorderStroke(1.dp, DividerDefaults.color.copy(alpha = 0.15f))
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Order #${order.id.take(8)}", style = MaterialTheme.typography.titleMedium)
-            createdLabel?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    modifier = Modifier.size(64.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF1F1F1F)
+                ) {
+                    val thumbnail = order.thumbnailUrl
+                    if (!thumbnail.isNullOrBlank()) {
+                        val model = remember(thumbnail) {
+                            val key = cacheKeyFrom(thumbnail)
+                            ImageRequest.Builder(context)
+                                .data(thumbnail)
+                                .memoryCacheKey(key)
+                                .diskCacheKey(key)
+                                .allowHardware(false)
+                                .diskCachePolicy(CachePolicy.ENABLED)
+                                .memoryCachePolicy(CachePolicy.ENABLED)
+                                .networkCachePolicy(CachePolicy.ENABLED)
+                                .build()
+                        }
+                        AsyncImage(
+                            model = model,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            placeholder = ColorPainter(Color(0xFF2A2A2A)),
+                            error = ColorPainter(Color(0xFF2A2A2A)),
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = order.title ?: "Listing ${order.listingId}",
+                        color = GreenDark,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    variantSummary?.let {
+                        Text(
+                            text = it,
+                            color = Color(0xFF9AA3AB),
+                            fontSize = 12.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(unitPriceLabel, color = GreenDark, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        text = "Qty ${order.quantity}",
+                        color = Color(0xFF607D8B),
+                        fontSize = 12.sp
+                    )
+                    createdLabel?.let {
+                        Text(
+                            text = it,
+                            color = Color(0xFF607D8B),
+                            fontSize = 12.sp
+                        )
+                    }
+                }
             }
-            Text("Listing: ${order.listingId}", style = MaterialTheme.typography.bodySmall)
-            Text("Total: $totalLabel", style = MaterialTheme.typography.bodyMedium)
-            Text("Status: ${order.status}", style = MaterialTheme.typography.bodySmall)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = "Order #${order.id.take(8)}",
+                        color = Color(0xFF607D8B),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Total $totalLabel",
+                        color = GreenDark,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                StatusBadge(status = order.status)
+            }
         }
     }
 }
 
-private fun formatCurrency(totalCents: Int, currencyCode: String): String {
-    val amount = totalCents / 100.0
-    return runCatching {
-        val formatter = java.text.NumberFormat.getCurrencyInstance(Locale.getDefault())
-        formatter.currency = Currency.getInstance(currencyCode)
-        formatter.format(amount)
-    }.getOrElse {
-        String.format(Locale.getDefault(), "%.2f %s", amount, currencyCode)
+@Composable
+private fun StatusBadge(status: String, modifier: Modifier = Modifier) {
+    val locale = Locale.getDefault()
+    val normalized = status.ifBlank { "pending" }
+    val (accent, content) = when {
+        normalized.equals("paid", ignoreCase = true) || normalized.equals("completed", ignoreCase = true) ->
+            Color(0xFF2E7D32) to Color(0xFF2E7D32)
+        normalized.equals("pending", ignoreCase = true) -> Color(0xFFFFA000) to Color(0xFFFFA000)
+        normalized.equals("failed", ignoreCase = true) || normalized.equals("canceled", ignoreCase = true) ->
+            Color(0xFFB00020) to Color(0xFFB00020)
+        else -> Color(0xFF546E7A) to Color(0xFF546E7A)
+    }
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(50),
+        color = accent.copy(alpha = 0.12f),
+        contentColor = content,
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.28f))
+    ) {
+        Text(
+            text = normalized.replace('_', ' ').replaceFirstChar { if (it.isLowerCase()) it.titlecase(locale) else it.toString() },
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+        )
     }
 }
 

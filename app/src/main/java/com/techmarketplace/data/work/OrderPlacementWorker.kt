@@ -9,6 +9,7 @@ import androidx.work.WorkerParameters
 import com.techmarketplace.data.remote.ApiClient
 import com.techmarketplace.data.remote.dto.OrderCreateIn
 import com.techmarketplace.core.network.extractDetailMessage
+import com.techmarketplace.data.repository.orders.OrderDisplayDetails
 import com.techmarketplace.data.repository.orders.toLocalOrder
 import com.techmarketplace.data.storage.CartPreferences
 import com.techmarketplace.data.storage.cart.CartLocalDataSource
@@ -51,7 +52,8 @@ class OrderPlacementWorker(
                                 currency = entity.currency
                             )
                         )
-                        ordersCache.upsert(created.toLocalOrder())
+                        val displayDetails = OrderDisplayDetails.fromCartItem(entity)
+                        ordersCache.upsert(created.toLocalOrder(displayDetails))
                         local.removeById(entity.cartItemId, markPending = false)
                     } catch (http: HttpException) {
                         if (http.code() >= 500 || http.code() == 429) throw http
