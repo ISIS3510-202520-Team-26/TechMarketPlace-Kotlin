@@ -114,7 +114,6 @@ fun HomeScreen(
 
                     Spacer(Modifier.height(10.dp))
 
-                    // Barra de búsqueda (sin KeyboardOptions)
                     OutlinedTextField(
                         value = query,
                         onValueChange = { query = it },
@@ -137,7 +136,7 @@ fun HomeScreen(
 
                     Spacer(Modifier.height(12.dp))
 
-                    // Chips de categorías
+                    // Category chips
 
 
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -175,7 +174,7 @@ fun HomeScreen(
 
                     Spacer(Modifier.height(12.dp))
 
-                    // Grid de productos
+                    // Grid
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(2),
                         modifier = Modifier.fillMaxSize(),
