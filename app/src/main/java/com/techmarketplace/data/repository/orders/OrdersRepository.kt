@@ -7,12 +7,19 @@ import com.techmarketplace.data.remote.dto.OrderOut
 import com.techmarketplace.data.storage.LocalOrder
 import com.techmarketplace.data.storage.MyOrdersStore
 import com.techmarketplace.data.storage.orders.OrdersLocalDataSource
+import java.io.IOException
+import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import java.time.Instant
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 
 class OrdersRepository(
     private val ordersApi: OrdersApi,
@@ -20,6 +27,13 @@ class OrdersRepository(
     private val local: OrdersLocalDataSource,
     scope: CoroutineScope
 ) {
+
+    private val json = Json {
+        ignoreUnknownKeys = true
+        explicitNulls = false
+    }
+
+    private val orderListSerializer = ListSerializer(OrderOut.serializer())
 
     init {
         scope.launch {
@@ -32,7 +46,7 @@ class OrdersRepository(
     suspend fun syncOnlineFirst(): OrdersSyncResult {
         return try {
             val cachedById = local.read().associateBy { it.id }
-            val remote = ordersApi.list()
+            val remote = fetchRemoteOrders()
             val resolved = coroutineScope {
                 remote.map { order ->
                     async {
@@ -63,6 +77,75 @@ class OrdersRepository(
 
     suspend fun upsert(order: LocalOrder) {
         local.upsert(order)
+    }
+
+    private suspend fun fetchRemoteOrders(): List<OrderOut> {
+        return try {
+            ordersApi.list()
+        } catch (serialization: SerializationException) {
+            decodeOrdersFallback(serialization)
+        } catch (illegal: IllegalArgumentException) {
+            decodeOrdersFallback(illegal)
+        }
+    }
+
+    private suspend fun decodeOrdersFallback(cause: Throwable): List<OrderOut> {
+        val body = try {
+            ordersApi.listRaw()
+        } catch (fallbackFailure: Throwable) {
+            if (fallbackFailure is IOException) {
+                throw fallbackFailure
+            }
+            throw cause
+        }
+
+        body.use { responseBody ->
+            val raw = responseBody.string()
+            if (raw.isBlank()) {
+                return emptyList()
+            }
+
+            val element = json.parseToJsonElement(raw.trim())
+            val orders = extractOrders(element)
+            if (orders != null) {
+                return orders
+            }
+            throw SerializationException("Unable to parse orders response")
+        }
+    }
+
+    private fun extractOrders(element: JsonElement): List<OrderOut>? {
+        when (element) {
+            is JsonArray -> {
+                return json.decodeFromJsonElement(orderListSerializer, element)
+            }
+            is JsonObject -> {
+                val candidates = sequenceOf(
+                    element,
+                    element["orders"] as? JsonObject
+                ).filterNotNull()
+
+                for (candidate in candidates) {
+                    candidate.values.firstNotNullOfOrNull { child ->
+                        when (child) {
+                            is JsonArray -> json.decodeFromJsonElement(orderListSerializer, child)
+                            is JsonObject -> {
+                                val nested = child.values.firstNotNullOfOrNull { nestedChild ->
+                                    if (nestedChild is JsonArray) {
+                                        json.decodeFromJsonElement(orderListSerializer, nestedChild)
+                                    } else {
+                                        null
+                                    }
+                                }
+                                nested
+                            }
+                            else -> null
+                        }
+                    }?.let { return it }
+                }
+            }
+        }
+        return null
     }
 
     private suspend fun loadListingDetailIfNeeded(order: OrderOut): ListingDetailDto? {
