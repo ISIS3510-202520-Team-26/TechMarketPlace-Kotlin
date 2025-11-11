@@ -54,7 +54,8 @@ import com.techmarketplace.presentation.cart.viewmodel.CartViewModel
 import com.techmarketplace.presentation.home.view.AddProductRoute
 import com.techmarketplace.presentation.home.view.HomeRoute
 import com.techmarketplace.presentation.onboarding.view.WelcomeScreen
-import com.techmarketplace.presentation.orders.view.OrderScreen
+import com.techmarketplace.presentation.orders.view.OrdersRoute
+import com.techmarketplace.presentation.orders.viewmodel.OrdersViewModel
 import com.techmarketplace.presentation.product.view.ProductDetailRoute
 import com.techmarketplace.presentation.profile.view.ProfileRoute
 import com.techmarketplace.presentation.telemetry.view.TelemetryRoute
@@ -152,10 +153,12 @@ class MainActivity : ComponentActivity() {
                     }
 
                     val cartViewModel: CartViewModel = viewModel(factory = CartViewModel.factory(app))
+                    val ordersViewModel: OrdersViewModel = viewModel(factory = OrdersViewModel.factory(app))
 
                     LaunchedEffect(sessionState) {
                         if (sessionState == SessionState.Authenticated) {
                             cartViewModel.onLogin()
+                            ordersViewModel.refresh(force = true)
                         }
                     }
 
@@ -264,8 +267,9 @@ class MainActivity : ComponentActivity() {
 
                             // ORDER & CART
                             composable(BottomItem.Order.route) {
-                                OrderScreen(
-                                    onNavigateBottom = { navigateBottom(BottomItem.Home) }
+                                OrdersRoute(
+                                    viewModel = ordersViewModel,
+                                    onBack = { navigateBottom(BottomItem.Home) }
                                 )
                             }
                             composable(BottomItem.Cart.route) {

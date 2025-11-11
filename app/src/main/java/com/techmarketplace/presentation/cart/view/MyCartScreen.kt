@@ -43,6 +43,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.ColorPainter
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -54,6 +56,11 @@ import com.techmarketplace.domain.cart.CartItem
 import com.techmarketplace.domain.cart.CartState
 import com.techmarketplace.presentation.cart.viewmodel.CartViewModel
 import com.techmarketplace.presentation.cart.viewmodel.CartViewModel.CartEvent
+import coil.compose.AsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
+import com.techmarketplace.presentation.common.ui.cacheKeyFrom
+import com.techmarketplace.presentation.common.ui.formatPrice
 import java.text.DateFormat
 import java.util.Locale
 
@@ -237,6 +244,7 @@ private fun CartRow(
     onMinus: () -> Unit,
     onRemove: () -> Unit
 ) {
+    val context = LocalContext.current
     Surface(
         shape = RoundedCornerShape(20.dp),
         color = Color(0xFFF5F5F5),
@@ -259,7 +267,30 @@ private fun CartRow(
                         .size(64.dp)
                         .clip(RoundedCornerShape(12.dp)),
                     color = Color(0xFF1F1F1F)
-                ) {}
+                ) {
+                    if (!item.thumbnailUrl.isNullOrBlank()) {
+                        val model = remember(item.thumbnailUrl) {
+                            val key = cacheKeyFrom(item.thumbnailUrl)
+                                ImageRequest.Builder(context)
+                                    .data(item.thumbnailUrl)
+                                    .memoryCacheKey(key)
+                                .diskCacheKey(key)
+                                .allowHardware(false)
+                                .diskCachePolicy(CachePolicy.ENABLED)
+                                .memoryCachePolicy(CachePolicy.ENABLED)
+                                .networkCachePolicy(CachePolicy.ENABLED)
+                                .build()
+                        }
+                        AsyncImage(
+                            model = model,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            placeholder = ColorPainter(Color(0xFF2A2A2A)),
+                            error = ColorPainter(Color(0xFF2A2A2A)),
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(item.title, color = GreenDark, fontWeight = FontWeight.SemiBold)
@@ -374,13 +405,6 @@ private fun RoundIconBell() {
     Surface(color = Color(0xFFF5F5F5), shape = CircleShape) {
         Box(Modifier.size(40.dp))
     }
-}
-
-private fun formatPrice(priceCents: Int, currency: String): String {
-    val amount = priceCents.toDouble() / 100.0
-    val locale = Locale.getDefault()
-    val formatted = String.format(locale, "%,.2f", amount)
-    return "${currency.uppercase(locale)} $formatted"
 }
 
 

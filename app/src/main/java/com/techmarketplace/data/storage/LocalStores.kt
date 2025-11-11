@@ -1,27 +1,26 @@
 package com.techmarketplace.data.storage
 
+import com.techmarketplace.domain.cart.CartVariantDetail
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.serialization.Serializable
 
-data class LocalOrder(val id: String, val listingId: String, val totalCents: Int, val currency: String, val status: String)
+@Serializable
+data class LocalOrder(
+    val id: String,
+    val listingId: String,
+    val totalCents: Int,
+    val currency: String,
+    val status: String,
+    val createdAt: String? = null,
+    val title: String? = null,
+    val quantity: Int = 1,
+    val unitPriceCents: Int? = null,
+    val thumbnailUrl: String? = null,
+    val variantDetails: List<CartVariantDetail> = emptyList()
+)
 data class LocalPayment(val orderId: String, val action: String, val at: Long)
 data class LocalTelemetry(val type: String, val props: String, val at: Long)
-
-object MyOrdersStore {
-    private val _orders = MutableStateFlow<List<LocalOrder>>(emptyList())
-    val orders: StateFlow<List<LocalOrder>> = _orders
-
-    fun add(o: LocalOrder) {
-        val current = _orders.value.toMutableList()
-        val existingIndex = current.indexOfFirst { it.id == o.id }
-        if (existingIndex >= 0) {
-            current[existingIndex] = o
-        } else {
-            current.add(o)
-        }
-        _orders.value = current
-    }
-}
 
 object MyPaymentsStore {
     private val _items = MutableStateFlow<List<LocalPayment>>(emptyList())
