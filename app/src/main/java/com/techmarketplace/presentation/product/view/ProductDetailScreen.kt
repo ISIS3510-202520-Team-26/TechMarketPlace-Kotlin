@@ -5,6 +5,7 @@ package com.techmarketplace.presentation.product.view
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -50,6 +52,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
@@ -101,61 +104,73 @@ fun ProductDetailRoute(
         return base + key
     }
 
-    LaunchedEffect(listingId) {
-        loading = true
-        error = null
-        try {
-            val d = api.getListingDetail(listingId)
-            detail = d
+    // Clave de caché estable para Coil (ignora querystrings firmados)
+    fun cacheKeyFrom(url: String): String = url.substringBefore('?')
 
-            val p = d.photos.firstOrNull()
-            photoUrl = when {
-                p == null -> null
-                !p.imageUrl.isNullOrBlank() -> emulatorize(p.imageUrl!!)
-                !p.storageKey.isNullOrBlank() -> runCatching {
-                    imagesApi.getPreview(p.storageKey!!).preview_url
-                }.getOrElse { publicFromObjectKey(p.storageKey!!) }
-                else -> null
-            }
+    // Carga/recarga (para botón Retry)
+    fun reload() {
+        scope.launch {
+            loading = true
+            error = null
+            try {
+                val d = api.getListingDetail(listingId)
+                detail = d
 
-            runCatching {
-                val cats = api.getCategories()
-                categoryName = cats.firstOrNull { it.id == d.categoryId }?.name ?: d.categoryId
-            }
-            runCatching {
-                val brands = api.getBrands(categoryId = d.categoryId)
-                brandName = brands.firstOrNull { it.id == d.brandId }?.name
-                    ?: api.getBrands(null).firstOrNull { it.id == d.brandId }?.name
-                            ?: d.brandId
-            }
+                val p = d.photos.firstOrNull()
+                photoUrl = when {
+                    p == null -> null
+                    !p.imageUrl.isNullOrBlank() -> emulatorize(p.imageUrl!!)
+                    !p.storageKey.isNullOrBlank() -> runCatching {
+                        imagesApi.getPreview(p.storageKey!!).preview_url
+                    }.getOrElse { publicFromObjectKey(p.storageKey!!) }
+                    else -> null
+                }
 
-            runCatching {
-                telemetry.ingest(
-                    bearer = null,
-                    body = TelemetryBatch(
-                        events = listOf(
-                            TelemetryEvent(
-                                event_type = "product.viewed",
-                                session_id = "srv",
-                                user_id = null,
-                                listing_id = listingId,
-                                step = null,
-                                properties = emptyMap(),
-                                occurred_at = Instant.now().toString()
+                // lookups opcionales
+                runCatching {
+                    val cats = api.getCategories()
+                    categoryName = cats.firstOrNull { it.id == d.categoryId }?.name ?: d.categoryId
+                }
+                runCatching {
+                    val brands = api.getBrands(categoryId = d.categoryId)
+                    brandName = brands.firstOrNull { it.id == d.brandId }?.name
+                        ?: api.getBrands(null).firstOrNull { it.id == d.brandId }?.name
+                                ?: d.brandId
+                }
+
+                // telemetry fire-and-forget
+                runCatching {
+                    telemetry.ingest(
+                        bearer = null,
+                        body = TelemetryBatch(
+                            events = listOf(
+                                TelemetryEvent(
+                                    event_type = "product.viewed",
+                                    session_id = "srv",
+                                    user_id = null,
+                                    listing_id = listingId,
+                                    step = null,
+                                    properties = emptyMap(),
+                                    occurred_at = Instant.now().toString()
+                                )
                             )
                         )
                     )
-                )
+                }
+            } catch (e: HttpException) {
+                // Log técnico; UI amigable sin IPs/hosts ni cuerpos
+                Log.w("ProductDetail", "HTTP ${e.code()} while loading detail", e)
+                error = friendlyError(e.code())
+            } catch (e: Exception) {
+                Log.w("ProductDetail", "Detail load failed", e)
+                error = "We couldn't load this product right now. Check your connection and try again."
+            } finally {
+                loading = false
             }
-        } catch (e: HttpException) {
-            val body = e.response()?.errorBody()?.string()
-            error = "HTTP ${e.code()}${if (!body.isNullOrBlank()) " – $body" else ""}"
-        } catch (e: Exception) {
-            error = e.message ?: "Network error"
-        } finally {
-            loading = false
         }
     }
+
+    LaunchedEffect(listingId) { reload() }
 
     ProductDetailScreen(
         loading = loading,
@@ -165,6 +180,7 @@ fun ProductDetailRoute(
         brandName = brandName,
         photoUrl = photoUrl,
         onBack = onBack,
+        onRetry = { reload() },
         onAddToCart = {
             val current = detail
             if (current == null) {
@@ -196,8 +212,27 @@ fun ProductDetailRoute(
                 }
             }
         },
-        snack = snack
+        snack = snack,
+        buildRequest = { ctx, url ->
+            // Request Coil con claves de caché estables y política segura
+            val key = cacheKeyFrom(url)
+            ImageRequest.Builder(ctx)
+                .data(url)
+                .memoryCacheKey(key)
+                .diskCacheKey(key)
+                .allowHardware(false)
+                // si no hay red, intenta solo desde caché (evita errores visibles)
+                .networkCachePolicy(CachePolicy.ENABLED) // se respeta cache-control del OkHttp global
+                .build()
+        }
     )
+}
+
+private fun friendlyError(code: Int): String = when (code) {
+    401, 403 -> "You don't have permission to view this product."
+    404 -> "This product is no longer available."
+    500 -> "The server had a problem. Try again shortly."
+    else -> "We couldn't load this product right now. Please try again."
 }
 
 @Composable
@@ -209,15 +244,17 @@ private fun ProductDetailScreen(
     brandName: String?,
     photoUrl: String?,
     onBack: () -> Unit,
+    onRetry: () -> Unit,
     onAddToCart: () -> Unit,
-    snack: SnackbarHostState
+    snack: SnackbarHostState,
+    buildRequest: (Context, String) -> ImageRequest
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = detail?.title ?: "Detalle",
+                        text = detail?.title ?: "Detail",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -248,7 +285,13 @@ private fun ProductDetailScreen(
                     .fillMaxSize()
                     .padding(inner),
                 contentAlignment = Alignment.Center
-            ) { Text(error, color = Color(0xFFB00020)) }
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(error, color = Color(0xFFB00020))
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onClick = onRetry) { Text("Retry") }
+                }
+            }
 
             detail == null -> Box(
                 modifier = Modifier
@@ -268,7 +311,7 @@ private fun ProductDetailScreen(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // Imagen principal
+                    // Imagen principal (placeholder en caso de error)
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -278,13 +321,12 @@ private fun ProductDetailScreen(
                     ) {
                         if (!photoUrl.isNullOrBlank()) {
                             AsyncImage(
-                                model = ImageRequest.Builder(ctx)
-                                    .data(photoUrl)
-                                    .allowHardware(false)
-                                    .build(),
+                                model = buildRequest(ctx, photoUrl),
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier.fillMaxSize(),
+                                placeholder = ColorPainter(Color(0xFF2A2A2A)),
+                                error = ColorPainter(Color(0xFF2A2A2A)) // no expone rutas/IPs
                             )
                         }
                     }
@@ -326,7 +368,7 @@ private fun ProductDetailScreen(
                         Text(d.description!!, color = Color(0xFF37474F))
                     }
 
-                    // Ubicación: título + mapa (debajo de la descripción, sin números)
+                    // Ubicación: título + mapa (debajo de la descripción, sin números en UI)
                     if (d.latitude != null && d.longitude != null) {
                         Text("Location", fontWeight = FontWeight.SemiBold, color = Color(0xFF0F4D3A))
                         MapCard(
