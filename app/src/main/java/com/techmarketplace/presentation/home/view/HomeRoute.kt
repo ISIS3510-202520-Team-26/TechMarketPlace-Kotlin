@@ -79,7 +79,7 @@ private data class UiProduct(
 private val GreenDark = Color(0xFF0F4D3A)
 private val BottomBarHeight = 84.dp
 
-/* -------------------- Persistencia ligera -------------------- */
+/* -------------------- Persistence -------------------- */
 
 private object HomePrefs {
     private const val FILE = "home_filters"

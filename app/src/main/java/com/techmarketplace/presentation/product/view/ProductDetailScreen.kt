@@ -214,14 +214,12 @@ fun ProductDetailRoute(
         },
         snack = snack,
         buildRequest = { ctx, url ->
-            // Request Coil con claves de caché estables y política segura
             val key = cacheKeyFrom(url)
             ImageRequest.Builder(ctx)
                 .data(url)
                 .memoryCacheKey(key)
                 .diskCacheKey(key)
                 .allowHardware(false)
-                // si no hay red, intenta solo desde caché (evita errores visibles)
                 .networkCachePolicy(CachePolicy.ENABLED) // se respeta cache-control del OkHttp global
                 .build()
         }
