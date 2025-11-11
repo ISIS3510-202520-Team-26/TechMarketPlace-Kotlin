@@ -327,7 +327,7 @@ private fun OrderCard(
                     )
 
                     Text(
-                        text = "Order #${'$'}{order.id.take(8)}",
+                        text = "Order #${order.id.take(8)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFF607D8B)
                     )
@@ -338,7 +338,7 @@ private fun OrderCard(
                     ) {
                         StatusChip(status = order.status)
                         Text(
-                            text = "x${'$'}{order.quantity}",
+                            text = "x${order.quantity}",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFF607D8B),
                             fontWeight = FontWeight.Medium
