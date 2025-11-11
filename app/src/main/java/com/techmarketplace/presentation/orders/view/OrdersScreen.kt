@@ -49,6 +49,7 @@ import coil.compose.AsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.techmarketplace.core.designsystem.GreenDark
+import com.techmarketplace.core.network.fixEmulatorHost
 import com.techmarketplace.data.storage.LocalOrder
 import com.techmarketplace.presentation.common.ui.cacheKeyFrom
 import com.techmarketplace.presentation.common.ui.formatPrice
@@ -208,6 +209,7 @@ private fun OrderCard(order: LocalOrder, modifier: Modifier = Modifier) {
         order.variantDetails.takeIf { it.isNotEmpty() }
             ?.joinToString { "${it.name}: ${it.value}" }
     }
+    val thumbnailUrl = remember(order.thumbnailUrl) { fixEmulatorHost(order.thumbnailUrl) }
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -230,7 +232,7 @@ private fun OrderCard(order: LocalOrder, modifier: Modifier = Modifier) {
                     shape = RoundedCornerShape(12.dp),
                     color = Color(0xFF1F1F1F)
                 ) {
-                    val thumbnail = order.thumbnailUrl
+                    val thumbnail = thumbnailUrl
                     if (!thumbnail.isNullOrBlank()) {
                         val model = remember(thumbnail) {
                             val key = cacheKeyFrom(thumbnail)

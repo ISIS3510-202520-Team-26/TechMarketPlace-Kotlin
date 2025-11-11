@@ -1,5 +1,6 @@
 package com.techmarketplace.data.repository.orders
 
+import com.techmarketplace.core.network.fixEmulatorHost
 import com.techmarketplace.data.remote.dto.ListingDetailDto
 import com.techmarketplace.data.remote.dto.OrderOut
 import com.techmarketplace.data.storage.LocalOrder
@@ -43,7 +44,7 @@ fun OrderDisplayDetails.Companion.fromCartItem(entity: CartItemEntity): OrderDis
     quantity = entity.quantity,
     unitPriceCents = entity.priceCents,
     currency = entity.currency,
-    thumbnailUrl = entity.thumbnailUrl,
+    thumbnailUrl = fixEmulatorHost(entity.thumbnailUrl),
     variantDetails = entity.variantDetails
 )
 
@@ -51,6 +52,6 @@ fun OrderDisplayDetails.Companion.fromListing(detail: ListingDetailDto): OrderDi
     title = detail.title,
     unitPriceCents = detail.priceCents,
     currency = detail.currency,
-    thumbnailUrl = detail.photos.firstOrNull()?.imageUrl
+    thumbnailUrl = fixEmulatorHost(detail.photos.firstOrNull()?.imageUrl)
 )
 

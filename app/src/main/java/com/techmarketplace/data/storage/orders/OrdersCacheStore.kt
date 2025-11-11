@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.techmarketplace.core.network.fixEmulatorHost
 import com.techmarketplace.data.storage.LocalOrder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
@@ -36,25 +37,31 @@ class OrdersCacheStore @JvmOverloads constructor(
 
     val snapshots: Flow<OrdersSnapshot?> = dataStore.data.map { prefs ->
         val payload = prefs[payloadKey] ?: return@map null
-        runCatching { json.decodeFromString<OrdersSnapshot>(payload) }.getOrNull()
+        runCatching { json.decodeFromString<OrdersSnapshot>(payload) }
+            .getOrNull()
+            ?.normalize()
     }
 
     suspend fun read(): OrdersSnapshot? = snapshots.firstOrNull()
 
     suspend fun save(orders: List<LocalOrder>) {
-        val snapshot = OrdersSnapshot(orders = orders, savedAtEpochMillis = clock())
+        val snapshot = OrdersSnapshot(
+            orders = orders.map { it.normalize() },
+            savedAtEpochMillis = clock()
+        )
         dataStore.edit { prefs ->
             prefs[payloadKey] = json.encodeToString(snapshot)
         }
     }
 
     suspend fun upsert(order: LocalOrder) {
-        val current = read()?.orders?.toMutableList() ?: mutableListOf()
-        val existingIndex = current.indexOfFirst { it.id == order.id }
+        val normalizedOrder = order.normalize()
+        val current = read()?.orders?.map { it.normalize() }?.toMutableList() ?: mutableListOf()
+        val existingIndex = current.indexOfFirst { it.id == normalizedOrder.id }
         if (existingIndex >= 0) {
-            current[existingIndex] = order
+            current[existingIndex] = normalizedOrder
         } else {
-            current.add(0, order)
+            current.add(0, normalizedOrder)
         }
         save(current)
     }
@@ -65,3 +72,11 @@ class OrdersCacheStore @JvmOverloads constructor(
         }
     }
 }
+
+private fun OrdersSnapshot.normalize(): OrdersSnapshot = copy(
+    orders = orders.map { it.normalize() }
+)
+
+private fun LocalOrder.normalize(): LocalOrder = copy(
+    thumbnailUrl = fixEmulatorHost(thumbnailUrl)
+)
