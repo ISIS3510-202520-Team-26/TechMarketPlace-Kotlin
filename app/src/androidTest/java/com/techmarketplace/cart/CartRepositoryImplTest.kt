@@ -14,6 +14,7 @@ import com.techmarketplace.domain.cart.CartVariantDetail
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestCoroutineDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -34,7 +35,7 @@ class CartRepositoryImplTest {
     private lateinit var preferences: CartPreferences
     private lateinit var local: CartLocalDataSource
     private lateinit var connectivity: MutableStateFlow<Boolean>
-    private lateinit var dispatcher: StandardTestDispatcher
+    private lateinit var dispatcher: TestCoroutineDispatcher
     private lateinit var scope: TestScope
     private lateinit var repository: CartRepositoryImpl
     private var now: Long = 0L
@@ -47,7 +48,7 @@ class CartRepositoryImplTest {
             .addTypeConverter(CartTypeConverters)
             .build()
         preferences = CartPreferences(context)
-        dispatcher = StandardTestDispatcher()
+        dispatcher = StandardTestDispatcher() as TestCoroutineDispatcher
         scope = TestScope(dispatcher)
         local = CartLocalDataSource(database.cartDao(), preferences, dispatcher = dispatcher) { now }
         connectivity = MutableStateFlow(true)
