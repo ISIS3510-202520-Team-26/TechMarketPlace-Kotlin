@@ -24,6 +24,9 @@ foundation = "1.9.2"
 firebase-crashlytics-buildtools = "3.0.6"
 play-services-location = "21.3.0"
 
+playServicesMaps = "18.2.0"
+mapsCompose = "4.3.3"
+
 [plugins]
 android-application = { id = "com.android.application", version = "8.13.0" }
 kotlin-android      = { id = "org.jetbrains.kotlin.android", version = "2.0.21" }
@@ -32,6 +35,10 @@ google-services     = { id = "com.google.gms.google-services", version = "4.4.3"
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version = "2.0.21" }
 
 [libraries]
+
+play-services-maps = { module = "com.google.android.gms:play-services-maps", version.ref = "playServicesMaps" }
+maps-compose = { module = "com.google.maps.android:maps-compose", version.ref = "mapsCompose" }
+
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core-ktx" }
 
 # Compose BOM y libs típicas

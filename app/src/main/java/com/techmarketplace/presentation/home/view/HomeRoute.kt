@@ -699,7 +699,5 @@ private fun formatMoney(priceCents: Int, currency: String?): String {
         "EUR" -> "€"
         else -> "$"
     }
-    val major = priceCents / 100
-    val minor = priceCents % 100
-    return if (minor == 0) "$symbol$major" else "$symbol${major}.${minor.toString().padStart(2, '0')}"
+    return "$symbol$priceCents"
 }

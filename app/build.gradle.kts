@@ -10,6 +10,7 @@ val localProperties = gradleLocalProperties(rootDir, providers)
 val defaultApiBaseUrl = localProperties.getProperty("api.baseUrl") ?: "http://3.19.208.242:8000/v1/"
 val debugApiBaseUrl = localProperties.getProperty("api.baseUrl.debug") ?: defaultApiBaseUrl
 val releaseApiBaseUrl = localProperties.getProperty("api.baseUrl.release") ?: defaultApiBaseUrl
+val mapsApiKey = localProperties.getProperty("maps.apiKey") ?: ""
 
 plugins {
     alias(libs.plugins.android.application)
@@ -25,6 +26,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
+        manifestPlaceholders += mapOf("MAPS_API_KEY" to mapsApiKey)
         applicationId = "com.techmarketplace"
         minSdk = 23
         targetSdk = 34
@@ -66,6 +68,9 @@ android {
 }
 
 dependencies {
+
+    implementation(libs.play.services.maps)
+    implementation(libs.maps.compose)
     implementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(platform(libs.androidx.compose.bom))
 
