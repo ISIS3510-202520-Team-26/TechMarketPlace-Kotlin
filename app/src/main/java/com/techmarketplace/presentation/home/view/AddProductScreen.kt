@@ -9,6 +9,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -22,10 +23,11 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -64,22 +66,29 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberCameraPositionState
+import com.techmarketplace.data.remote.ApiClient
+import com.techmarketplace.data.remote.api.ListingApi
 import com.techmarketplace.data.remote.dto.CatalogItemDto
 import com.techmarketplace.data.storage.LocationStore
 import com.techmarketplace.presentation.listings.viewmodel.ListingsViewModel
-import kotlin.math.roundToInt
 import java.io.File
+import java.text.Normalizer
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.techmarketplace.data.remote.ApiClient
-import com.techmarketplace.data.remote.api.ListingApi
-import java.text.Normalizer
 
 /* ===================== CONFIG DE LÍMITES ===================== */
 private const val MAX_TITLE = 80
 private const val MAX_DESC = 600
-private const val MAX_PRICE_LEN = 12   // solo dígitos y un punto
+private const val MAX_PRICE_LEN = 12
 private const val MAX_QTY_LEN = 5
 private const val MAX_NEW_CATALOG_NAME = 40
 
@@ -132,7 +141,6 @@ fun AddProductRoute(
                 imageUri = imageUri
             ) { ok, message ->
                 if (ok) {
-                    // Telemetría: ya se dispara dentro de ListingsViewModel.createListing(...)
                     Toast.makeText(ctx, message ?: "Listing created!", Toast.LENGTH_SHORT).show()
                     onSaved()
                 } else {
@@ -269,8 +277,8 @@ fun AddProductScreen(
                 .fillMaxWidth()
                 .padding(inner)
                 .padding(16.dp)
-                .verticalScroll(screenScroll)   // 👈 scroll en toda la pantalla
-                .imePadding(),                  // 👈 evita que el teclado tape campos
+                .verticalScroll(screenScroll)
+                .imePadding(),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // ===== Imagen + preview =====
@@ -298,17 +306,33 @@ fun AddProductScreen(
 
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(onClick = {
-                        pickImage.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                        )
-                    }) { Text("Gallery") }
+                    OutlinedButton(
+                        onClick = {
+                            pickImage.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
+                        shape = RoundedCornerShape(24.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = Color.White,
+                            contentColor = GreenDark
+                        ),
+                        border = BorderStroke(1.dp, GreenDark)
+                    ) { Text("Gallery") }
 
-                    OutlinedButton(onClick = {
-                        val temp = createTempImageUri(ctx)
-                        cameraTempUri = temp
-                        takePicture.launch(temp)
-                    }) { Text("Camera") }
+                    OutlinedButton(
+                        onClick = {
+                            val temp = createTempImageUri(ctx)
+                            cameraTempUri = temp
+                            takePicture.launch(temp)
+                        },
+                        shape = RoundedCornerShape(24.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = Color.White,
+                            contentColor = GreenDark
+                        ),
+                        border = BorderStroke(1.dp, GreenDark)
+                    ) { Text("Camera") }
                 }
             }
 
@@ -347,7 +371,6 @@ fun AddProductScreen(
 
             // ===== Category =====
             var catExpanded by remember { mutableStateOf(false) }
-
             ExposedDropdownMenuBox(
                 expanded = catExpanded,
                 onExpandedChange = { catExpanded = !catExpanded }
@@ -357,9 +380,7 @@ fun AddProductScreen(
                     value = localCategories.firstOrNull { it.id == selectedCat }?.name ?: "",
                     onValueChange = {},
                     label = { Text("Category") },
-                    trailingIcon = {
-                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = catExpanded)
-                    },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = catExpanded) },
                     modifier = Modifier
                         .menuAnchor()
                         .fillMaxWidth(),
@@ -392,7 +413,6 @@ fun AddProductScreen(
 
             // ===== Brand =====
             var brandExpanded by remember { mutableStateOf(false) }
-
             ExposedDropdownMenuBox(
                 expanded = brandExpanded,
                 onExpandedChange = { brandExpanded = !brandExpanded }
@@ -403,9 +423,7 @@ fun AddProductScreen(
                         ?: if (selectedBrand.isBlank()) "— None —" else "",
                     onValueChange = {},
                     label = { Text("Brand (optional)") },
-                    trailingIcon = {
-                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = brandExpanded)
-                    },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = brandExpanded) },
                     modifier = Modifier
                         .menuAnchor()
                         .fillMaxWidth()
@@ -470,7 +488,7 @@ fun AddProductScreen(
                 supportingText = { Text("${quantity.length} / $MAX_QTY_LEN") }
             )
 
-            // ===== Description (crece y luego hace scroll interno) =====
+            // Description
             OutlinedTextField(
                 value = desc,
                 onValueChange = { desc = it.take(MAX_DESC) },
@@ -480,7 +498,7 @@ fun AddProductScreen(
                     .heightIn(min = 120.dp, max = 240.dp),
                 singleLine = false,
                 minLines = 4,
-                maxLines = 10, // al superar ~10 líneas, el TextField hace scroll vertical interno
+                maxLines = 10,
                 textStyle = TextStyle(fontSize = 14.sp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
                 supportingText = { Text("${desc.length} / $MAX_DESC") },
@@ -499,21 +517,24 @@ fun AddProductScreen(
                 )
             )
 
-            // ===== Ubicación (debug) =====
+            // ===== Ubicación: mapa (sin mostrar coordenadas) =====
             Divider()
-            Surface(
-                tonalElevation = 2.dp,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp)
-            ) {
-                Column(Modifier.padding(12.dp)) {
-                    Text("Location Stored", style = MaterialTheme.typography.titleSmall)
-                    val latText = lat?.toString() ?: "—"
-                    val lonText = lon?.toString() ?: "—"
-                    Text("lat: $latText")
-                    Text("lon: $lonText")
+            Text("Location", color = GreenDark, style = MaterialTheme.typography.titleSmall)
+            if (lat != null && lon != null) {
+                MapPreviewCard(lat = lat!!, lon = lon!!)
+            } else {
+                Surface(
+                    tonalElevation = 1.dp,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                ) {
+                    Text(
+                        "Location not available yet.",
+                        modifier = Modifier.padding(12.dp),
+                        color = Color(0xFF6B7783)
+                    )
                 }
             }
         }
@@ -601,6 +622,38 @@ fun AddProductScreen(
                 TextButton(enabled = !creating, onClick = { showNewBrand = false }) { Text("Cancelar") }
             }
         )
+    }
+}
+
+/* ------------------- Mapa preview (sin coordenadas) ------------------- */
+@Composable
+private fun MapPreviewCard(lat: Double, lon: Double) {
+    val pos = LatLng(lat, lon)
+    val cameraState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(pos, 14f)
+    }
+    Surface(
+        tonalElevation = 2.dp,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(180.dp)
+            .padding(top = 8.dp)
+    ) {
+        GoogleMap(
+            modifier = Modifier.fillMaxWidth(),
+            cameraPositionState = cameraState,
+            uiSettings = MapUiSettings(
+                zoomControlsEnabled = false,
+                myLocationButtonEnabled = false,
+                compassEnabled = false
+            )
+        ) {
+            Marker(
+                state = MarkerState(pos),
+                title = "Listing location"
+            )
+        }
     }
 }
 
