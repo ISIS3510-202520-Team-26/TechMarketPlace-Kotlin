@@ -15,6 +15,7 @@ import com.techmarketplace.data.repository.orders.OrdersSyncResult
 import com.techmarketplace.data.storage.LocalOrder
 import com.techmarketplace.data.storage.MyOrdersStore
 import com.techmarketplace.data.storage.orders.OrdersLocalDataSource
+import java.io.IOException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 class OrdersViewModel(
     app: Application,
@@ -80,10 +82,18 @@ class OrdersViewModel(
                     Log.e(TAG, "Unable to load orders", result.cause)
                     _uiState.value = OrdersUiState(
                         isLoading = false,
-                        errorMessage = "We couldn't load your orders. Please try again later."
+                        errorMessage = buildFriendlyErrorMessage(result.cause)
                     )
                 }
             }
+        }
+    }
+
+    private fun buildFriendlyErrorMessage(cause: Throwable): String {
+        return when (cause) {
+            is IOException -> "We couldn't reach TechMarketPlace right now. Check your internet connection and pull to refresh."
+            is HttpException -> "TechMarketPlace is having trouble loading your orders. Please try again in a few moments."
+            else -> "Something unexpected happened while loading your orders. Try again in a moment or contact support if it continues."
         }
     }
 

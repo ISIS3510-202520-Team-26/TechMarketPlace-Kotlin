@@ -21,7 +21,11 @@ import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.DividerDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -34,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -107,18 +112,21 @@ private fun BoxScope.OrdersContent(
         }
 
         uiState.infoMessage?.let { message ->
-            OrdersMessageCard(
-                text = message,
+            OrdersNoticeCard(
+                title = "Offline mode",
+                message = message,
+                kind = OrdersNoticeKind.Info,
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(12.dp))
         }
 
         uiState.errorMessage?.let { message ->
-            OrdersMessageCard(
-                text = message,
-                modifier = Modifier.fillMaxWidth(),
-                isError = true
+            OrdersNoticeCard(
+                title = "Unable to refresh orders",
+                message = message,
+                kind = OrdersNoticeKind.Error,
+                modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(12.dp))
         }
@@ -175,35 +183,96 @@ private fun OrdersHeader(orderCount: Int) {
 }
 
 @Composable
-private fun OrdersMessageCard(
-    text: String,
+private fun OrdersNoticeCard(
+    title: String,
+    message: String,
+    kind: OrdersNoticeKind,
     modifier: Modifier = Modifier,
-    isError: Boolean = false,
 ) {
-    val (container, content) = remember(isError) {
-        if (isError) {
-            Color(0xFFFFEBEE) to Color(0xFFC62828)
-        } else {
-            Color(0xFFE3F2FD) to Color(0xFF0D47A1)
+    val appearance = remember(kind) {
+        when (kind) {
+            OrdersNoticeKind.Info -> OrdersNoticeStyle(
+                container = Color(0xFFE3F2FD),
+                content = Color(0xFF0D47A1),
+                icon = Icons.Outlined.CloudOff,
+                accent = Color(0xFF0D47A1).copy(alpha = 0.12f)
+            )
+
+            OrdersNoticeKind.Error -> OrdersNoticeStyle(
+                container = Color(0xFFFFEBEE),
+                content = Color(0xFFC62828),
+                icon = Icons.Outlined.Warning,
+                accent = Color(0xFFC62828).copy(alpha = 0.12f)
+            )
         }
     }
+
+    val container = appearance.container
+    val content = appearance.content
+    val icon = appearance.icon
+    val accent = appearance.accent
 
     Surface(
         modifier = modifier,
         color = container,
         contentColor = content,
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, content.copy(alpha = 0.24f)),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.dp, content.copy(alpha = 0.2f)),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp
     ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = accent,
+                contentColor = content,
+                tonalElevation = 0.dp,
+                shadowElevation = 0.dp
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = content
+                )
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = content.copy(alpha = 0.9f)
+                )
+            }
+        }
     }
 }
+
+private data class OrdersNoticeStyle(
+    val container: Color,
+    val content: Color,
+    val icon: ImageVector,
+    val accent: Color
+)
+
+private enum class OrdersNoticeKind { Info, Error }
 
 @Composable
 private fun OrderCard(
