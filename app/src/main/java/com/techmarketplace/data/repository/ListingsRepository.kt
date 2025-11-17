@@ -4,17 +4,20 @@ package com.techmarketplace.data.repository
 import com.techmarketplace.data.remote.api.ListingApi
 import com.techmarketplace.data.remote.dto.CatalogItemDto
 import com.techmarketplace.data.remote.dto.CreateListingRequest
+import com.techmarketplace.data.remote.dto.LocationIn
 import com.techmarketplace.data.remote.dto.ListingDetailDto
 import com.techmarketplace.data.remote.dto.SearchListingsResponse
-import com.techmarketplace.data.remote.dto.LocationIn
+import com.techmarketplace.data.storage.CachedListingDetail
 import com.techmarketplace.data.storage.HomeFeedCacheStore
+import com.techmarketplace.data.storage.ListingDetailCacheStore
 import com.techmarketplace.data.storage.LocationStore
 import kotlinx.coroutines.flow.firstOrNull
 
 class ListingsRepository(
     private val api: ListingApi,
-    private val locationStore: LocationStore,
+    private val locationStore: LocationStore? = null,
     private val homeFeedCacheStore: HomeFeedCacheStore? = null,
+    private val listingDetailCacheStore: ListingDetailCacheStore? = null,
     private val clock: () -> Long = { System.currentTimeMillis() }
 ) {
 
@@ -134,8 +137,47 @@ class ListingsRepository(
         }
     }
 
-    suspend fun getListingDetail(id: String): ListingDetailDto =
-        api.getListingDetail(id)
+    suspend fun cacheListingDetail(detail: ListingDetailDto) {
+        listingDetailCacheStore?.save(detail)
+    }
+
+    suspend fun getCachedListingDetail(id: String): CachedListingDetail? =
+        listingDetailCacheStore?.get(id)
+
+    suspend fun getListingDetail(id: String, preferCache: Boolean = false): ListingDetailResult {
+        val cacheStore = listingDetailCacheStore
+        if (preferCache && cacheStore != null) {
+            val cached = cacheStore.get(id)
+            if (cached != null) {
+                return ListingDetailResult(
+                    detail = cached.detail,
+                    fromCache = true,
+                    savedAtEpochMillis = cached.savedAtEpochMillis
+                )
+            }
+        }
+
+        return try {
+            val detail = api.getListingDetail(id)
+            val saved = cacheStore?.save(detail)
+            ListingDetailResult(
+                detail = detail,
+                fromCache = false,
+                savedAtEpochMillis = saved?.savedAtEpochMillis ?: clock()
+            )
+        } catch (t: Throwable) {
+            val cached = cacheStore?.get(id)
+            if (cached != null) {
+                ListingDetailResult(
+                    detail = cached.detail,
+                    fromCache = true,
+                    savedAtEpochMillis = cached.savedAtEpochMillis
+                )
+            } else {
+                throw t
+            }
+        }
+    }
 
     // -------- Crear listing ----------
     /**
@@ -157,8 +199,8 @@ class ListingsRepository(
     ): ListingDetailDto {
 
         // Leer lo que guardaste al pedir permisos (LocationGate)
-        val lat = locationStore.lastLatitudeFlow.firstOrNull()
-        val lon = locationStore.lastLongitudeFlow.firstOrNull()
+        val lat = locationStore?.lastLatitudeFlow?.firstOrNull()
+        val lon = locationStore?.lastLongitudeFlow?.firstOrNull()
         val loc: LocationIn? = if (lat != null && lon != null) LocationIn(lat, lon) else null
 
         val body = CreateListingRequest(
@@ -212,3 +254,9 @@ class ListingsRepository(
     }
 
 }
+
+data class ListingDetailResult(
+    val detail: ListingDetailDto,
+    val fromCache: Boolean,
+    val savedAtEpochMillis: Long?
+)

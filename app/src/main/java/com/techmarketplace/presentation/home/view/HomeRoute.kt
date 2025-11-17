@@ -52,6 +52,7 @@ import com.techmarketplace.data.repository.ListingsRepository
 import com.techmarketplace.data.repository.TelemetryRepositoryImpl
 import com.techmarketplace.data.storage.CategoryClickStore
 import com.techmarketplace.data.storage.HomeFeedCacheStore
+import com.techmarketplace.data.storage.ListingDetailCacheStore
 import com.techmarketplace.data.storage.LocationStore
 import com.techmarketplace.data.storage.getAndSaveLocation
 import com.techmarketplace.data.telemetry.LoginTelemetry
@@ -191,7 +192,10 @@ fun HomeRoute(
     val context = LocalContext.current
     val locationStore = remember { LocationStore(context) }
     val homeFeedCacheStore = remember { HomeFeedCacheStore(context) }
-    val listingsRepository = remember { ListingsRepository(api, locationStore, homeFeedCacheStore) }
+    val listingDetailCacheStore = remember { ListingDetailCacheStore(context) }
+    val listingsRepository = remember {
+        ListingsRepository(api, locationStore, homeFeedCacheStore, listingDetailCacheStore)
+    }
     val telemetryRepository = remember(context) { TelemetryRepositoryImpl.create(context) }
     val isOnline by rememberIsOnline()
 
