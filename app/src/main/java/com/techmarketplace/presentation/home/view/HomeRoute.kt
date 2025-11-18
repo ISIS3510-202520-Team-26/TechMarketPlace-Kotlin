@@ -517,6 +517,17 @@ fun HomeRoute(
     LaunchedEffect(query) { if (categoriesLoaded) fetchListings() }
     LaunchedEffect(nearEnabled, radiusKm, lat, lon) { if (categoriesLoaded) fetchListings() }
 
+    val prefetchTargets = remember(products) { products.take(6).map { it.id } }
+    LaunchedEffect(prefetchTargets, isOnline) {
+        if (!isOnline || prefetchTargets.isEmpty()) return@LaunchedEffect
+        prefetchTargets.forEach { id ->
+            val cached = listingsRepository.getCachedListingDetail(id)
+            if (cached == null) {
+                runCatching { listingsRepository.getListingDetail(id) }
+            }
+        }
+    }
+
     val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val bottomSpace = BottomBarHeight + navInset + 8.dp
     val orderedCategories = remember(categories, topIds) { orderCategories(categories, topIds) }
