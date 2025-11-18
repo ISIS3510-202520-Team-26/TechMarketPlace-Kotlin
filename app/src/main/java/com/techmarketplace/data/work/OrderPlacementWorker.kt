@@ -62,7 +62,7 @@ class OrderPlacementWorker(
                         val detail = http.extractDetailMessage()
                         if (detail != null) {
                             if (userFacingError == null) {
-                                userFacingError = detail
+                                userFacingError = detailº
                             }
                         } else if (userFacingError == null) {
                             userFacingError = "Unable to place order (${http.code()})"
