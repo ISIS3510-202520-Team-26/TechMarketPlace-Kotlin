@@ -16,6 +16,7 @@ import com.techmarketplace.data.repository.ListingsRepository
 import com.techmarketplace.data.repository.ListingImagesRepository
 import com.techmarketplace.data.repository.TelemetryRepositoryImpl
 import com.techmarketplace.data.storage.HomeFeedCacheStore
+import com.techmarketplace.data.storage.ListingDetailCacheStore
 import com.techmarketplace.data.storage.LocationStore
 import com.techmarketplace.data.telemetry.LoginTelemetry
 import com.techmarketplace.domain.telemetry.TelemetryRepository
@@ -176,10 +177,12 @@ class ListingsViewModel(
                 val api = ApiClient.listingApi()
                 val imagesApi = ApiClient.imagesApi()
                 val store = LocationStore(app)
+                val detailCacheStore = ListingDetailCacheStore(app)
                 val repository = ListingsRepository(
                     api = api,
                     locationStore = store,
-                    homeFeedCacheStore = HomeFeedCacheStore(app)
+                    homeFeedCacheStore = HomeFeedCacheStore(app),
+                    listingDetailCacheStore = detailCacheStore
                 )
                 val imagesRepository = ListingImagesRepository(imagesApi)
                 val telemetryRepository = TelemetryRepositoryImpl.create(app)

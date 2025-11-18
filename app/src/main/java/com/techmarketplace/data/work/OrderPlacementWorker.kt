@@ -8,16 +8,17 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.techmarketplace.data.remote.ApiClient
 import com.techmarketplace.data.remote.dto.OrderCreateIn
-import com.techmarketplace.data.remote.dto.OrderOut
+import com.techmarketplace.core.network.extractDetailMessage
+import com.techmarketplace.data.repository.orders.OrderDisplayDetails
+import com.techmarketplace.data.repository.orders.fromCartItem
+import com.techmarketplace.data.repository.orders.toLocalOrder
 import com.techmarketplace.data.storage.CartPreferences
-import com.techmarketplace.data.storage.LocalOrder
-import com.techmarketplace.data.storage.MyOrdersStore
 import com.techmarketplace.data.storage.cart.CartLocalDataSource
 import com.techmarketplace.data.storage.dao.CartDatabaseProvider
+import com.techmarketplace.data.storage.orders.OrdersCacheStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
-import org.json.JSONObject
 
 class OrderPlacementWorker(
     appContext: Context,
@@ -37,6 +38,7 @@ class OrderPlacementWorker(
 
             ApiClient.init(context)
             val ordersApi = ApiClient.ordersApi()
+            val ordersCache = OrdersCacheStore(context)
 
             try {
                 var userFacingError: String? = null
@@ -51,15 +53,16 @@ class OrderPlacementWorker(
                                 currency = entity.currency
                             )
                         )
-                        MyOrdersStore.add(created.toLocalOrder())
+                        val displayDetails = OrderDisplayDetails.fromCartItem(entity)
+                        ordersCache.upsert(created.toLocalOrder(displayDetails))
                         local.removeById(entity.cartItemId, markPending = false)
                     } catch (http: HttpException) {
                         if (http.code() >= 500 || http.code() == 429) throw http
 
-                        val detail = http.readErrorDetail()
+                        val detail = http.extractDetailMessage()
                         if (detail != null) {
                             if (userFacingError == null) {
-                                userFacingError = detail
+                                userFacingError = detailº
                             }
                         } else if (userFacingError == null) {
                             userFacingError = "Unable to place order (${http.code()})"
@@ -98,25 +101,4 @@ class OrderPlacementWorker(
                 .enqueueUniqueWork(UNIQUE_NAME, ExistingWorkPolicy.REPLACE, work)
         }
     }
-}
-
-private fun OrderOut.toLocalOrder(): LocalOrder = LocalOrder(
-    id = id,
-    listingId = listingId,
-    totalCents = totalCents,
-    currency = currency,
-    status = status
-)
-
-private fun HttpException.readErrorDetail(): String? = try {
-    response()?.errorBody()?.charStream()?.use { stream ->
-        val text = stream.readText()
-        if (text.isBlank()) {
-            null
-        } else {
-            JSONObject(text).optString("detail").takeIf { it.isNotBlank() }
-        }
-    }
-} catch (_: Exception) {
-    null
 }

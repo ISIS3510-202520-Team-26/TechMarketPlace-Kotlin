@@ -36,6 +36,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,13 +62,20 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
+import com.techmarketplace.core.connectivity.ConnectivityObserver
 import com.techmarketplace.data.remote.ApiClient
 import com.techmarketplace.data.remote.api.ImagesApi
 import com.techmarketplace.data.remote.api.TelemetryBatch
 import com.techmarketplace.data.remote.api.TelemetryEvent
 import com.techmarketplace.data.remote.dto.ListingDetailDto
+import com.techmarketplace.data.repository.ListingDetailResult
+import com.techmarketplace.data.repository.ListingsRepository
+import com.techmarketplace.data.storage.HomeFeedCacheStore
+import com.techmarketplace.data.storage.ListingDetailCacheStore
+import com.techmarketplace.data.storage.LocationStore
 import com.techmarketplace.domain.cart.CartItemUpdate
 import com.techmarketplace.presentation.cart.viewmodel.CartViewModel
+import java.io.IOException
 import java.time.Instant
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
@@ -78,14 +86,26 @@ fun ProductDetailRoute(
     cartViewModel: CartViewModel,
     onBack: () -> Unit
 ) {
-    val api = remember { ApiClient.listingApi() }
+    val context = LocalContext.current
+    val appContext = context.applicationContext
     val telemetry = remember { ApiClient.telemetryApi() }
     val imagesApi: ImagesApi = remember { ApiClient.imagesApi() }
+    val listingsRepository = remember(appContext) {
+        ListingsRepository(
+            api = ApiClient.listingApi(),
+            locationStore = LocationStore(appContext),
+            homeFeedCacheStore = HomeFeedCacheStore(appContext),
+            listingDetailCacheStore = ListingDetailCacheStore(appContext)
+        )
+    }
     val scope = rememberCoroutineScope()
+    val isOnline by ConnectivityObserver.observe(context)
+        .collectAsState(initial = ConnectivityObserver.isOnlineNow(context))
 
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var detail by remember { mutableStateOf<ListingDetailDto?>(null) }
+    var usingCachedDetail by remember { mutableStateOf(false) }
 
     var categoryName by remember { mutableStateOf<String?>(null) }
     var brandName by remember { mutableStateOf<String?>(null) }
@@ -107,35 +127,51 @@ fun ProductDetailRoute(
     // Clave de caché estable para Coil (ignora querystrings firmados)
     fun cacheKeyFrom(url: String): String = url.substringBefore('?')
 
+    suspend fun resolvePhotoUrl(detail: ListingDetailDto): String? {
+        val p = detail.photos.firstOrNull() ?: return null
+        return when {
+            !p.imageUrl.isNullOrBlank() -> emulatorize(p.imageUrl!!)
+            !p.storageKey.isNullOrBlank() -> {
+                val key = p.storageKey!!
+                val preview = runCatching { imagesApi.getPreview(key).preview_url }
+                    .getOrNull()
+                when {
+                    !preview.isNullOrBlank() -> emulatorize(preview!!)
+                    else -> publicFromObjectKey(key)
+                }
+            }
+            else -> null
+        }
+    }
+
     // Carga/recarga (para botón Retry)
     fun reload() {
         scope.launch {
             loading = true
             error = null
+            var showSavedInfo = false
+            val preferCache = !isOnline
             try {
-                val d = api.getListingDetail(listingId)
+                val result = listingsRepository.getListingDetail(
+                    id = listingId,
+                    preferCache = preferCache
+                )
+                val d = result.detail
                 detail = d
-
-                val p = d.photos.firstOrNull()
-                photoUrl = when {
-                    p == null -> null
-                    !p.imageUrl.isNullOrBlank() -> emulatorize(p.imageUrl!!)
-                    !p.storageKey.isNullOrBlank() -> runCatching {
-                        imagesApi.getPreview(p.storageKey!!).preview_url
-                    }.getOrElse { publicFromObjectKey(p.storageKey!!) }
-                    else -> null
-                }
+                usingCachedDetail = result.fromCache
+                photoUrl = resolvePhotoUrl(d)
+                showSavedInfo = !preferCache && result.fromCache
 
                 // lookups opcionales
                 runCatching {
-                    val cats = api.getCategories()
+                    val cats = listingsRepository.getCategories()
                     categoryName = cats.firstOrNull { it.id == d.categoryId }?.name ?: d.categoryId
                 }
                 runCatching {
-                    val brands = api.getBrands(categoryId = d.categoryId)
+                    val brands = listingsRepository.getBrands(categoryId = d.categoryId)
                     brandName = brands.firstOrNull { it.id == d.brandId }?.name
-                        ?: api.getBrands(null).firstOrNull { it.id == d.brandId }?.name
-                                ?: d.brandId
+                        ?: listingsRepository.getBrands(null).firstOrNull { it.id == d.brandId }?.name
+                        ?: d.brandId
                 }
 
                 // telemetry fire-and-forget
@@ -161,11 +197,17 @@ fun ProductDetailRoute(
                 // Log técnico; UI amigable sin IPs/hosts ni cuerpos
                 Log.w("ProductDetail", "HTTP ${e.code()} while loading detail", e)
                 error = friendlyError(e.code())
+            } catch (e: IOException) {
+                Log.w("ProductDetail", "Detail load failed (offline)", e)
+                error = "You're offline. Connect to load this listing."
             } catch (e: Exception) {
                 Log.w("ProductDetail", "Detail load failed", e)
                 error = "We couldn't load this product right now. Check your connection and try again."
             } finally {
                 loading = false
+            }
+            if (showSavedInfo) {
+                snack.showSnackbar("Showing saved info")
             }
         }
     }
@@ -179,6 +221,9 @@ fun ProductDetailRoute(
         categoryName = categoryName,
         brandName = brandName,
         photoUrl = photoUrl,
+        isOffline = !isOnline,
+        usingCachedDetail = usingCachedDetail,
+        canRetry = isOnline,
         onBack = onBack,
         onRetry = { reload() },
         onAddToCart = {
@@ -241,6 +286,9 @@ private fun ProductDetailScreen(
     categoryName: String?,
     brandName: String?,
     photoUrl: String?,
+    isOffline: Boolean,
+    usingCachedDetail: Boolean,
+    canRetry: Boolean,
     onBack: () -> Unit,
     onRetry: () -> Unit,
     onAddToCart: () -> Unit,
@@ -287,7 +335,20 @@ private fun ProductDetailScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(error, color = Color(0xFFB00020))
                     Spacer(Modifier.height(8.dp))
-                    OutlinedButton(onClick = onRetry) { Text("Retry") }
+                    OutlinedButton(
+                        onClick = onRetry,
+                        enabled = canRetry
+                    ) {
+                        Text(if (canRetry) "Retry" else "Offline")
+                    }
+                    if (!canRetry) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Connect to the internet to try again.",
+                            color = Color(0xFF6B7783),
+                            fontSize = 12.sp
+                        )
+                    }
                 }
             }
 
@@ -309,6 +370,22 @@ private fun ProductDetailScreen(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    if (usingCachedDetail) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Color(0xFFFFF8E1),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = if (isOffline) "Offline – showing saved info" else "Showing saved info",
+                                modifier = Modifier.padding(12.dp),
+                                color = Color(0xFF805B00),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        Spacer(Modifier.height(12.dp))
+                    }
+
                     // Imagen principal (placeholder en caso de error)
                     Surface(
                         modifier = Modifier

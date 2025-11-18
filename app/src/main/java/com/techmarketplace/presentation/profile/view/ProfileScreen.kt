@@ -28,9 +28,11 @@ import com.techmarketplace.core.ui.BottomItem
 import com.techmarketplace.data.remote.ApiClient
 import com.techmarketplace.data.remote.api.AuthApi
 import com.techmarketplace.data.remote.api.ImagesApi
-import com.techmarketplace.data.remote.api.ListingApi
-import com.techmarketplace.data.remote.dto.ListingDetailDto
 import com.techmarketplace.data.remote.dto.ListingSummaryDto
+import com.techmarketplace.data.repository.ListingsRepository
+import com.techmarketplace.data.storage.HomeFeedCacheStore
+import com.techmarketplace.data.storage.ListingDetailCacheStore
+import com.techmarketplace.data.storage.LocationStore
 import com.techmarketplace.data.storage.TokenStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -51,9 +53,16 @@ fun ProfileScreen(
 
     // APIs
     val authApi: AuthApi = remember { ApiClient.authApi() }
-    val listingApi: ListingApi = remember { ApiClient.listingApi() }
     val imagesApi: ImagesApi = remember { ApiClient.imagesApi() }
     val tokenStore = remember { TokenStore(ctx) }
+    val listingsRepository = remember {
+        ListingsRepository(
+            api = ApiClient.listingApi(),
+            locationStore = LocationStore(ctx),
+            homeFeedCacheStore = HomeFeedCacheStore(ctx),
+            listingDetailCacheStore = ListingDetailCacheStore(ctx)
+        )
+    }
 
     // ====== Estado de usuario ======
     var userId by remember { mutableStateOf<String?>(null) }
@@ -91,18 +100,17 @@ fun ProfileScreen(
         scope.launch {
             loading = true; error = null
             try {
-                val res = listingApi.searchListings(
+                listingsRepository.searchListings(
                     sellerId = sellerId,
                     page = 1,
                     pageSize = 20
-                )
-                listings = res.items
-                page = 1
-                hasNext = res.hasNext
-            } catch (e: HttpException) {
-                error = "HTTP ${e.code()}"
-            } catch (e: Exception) {
-                error = e.message
+                ).onSuccess { res ->
+                    listings = res.items
+                    page = 1
+                    hasNext = res.hasNext
+                }.onFailure { e ->
+                    error = (e as? HttpException)?.let { "HTTP ${it.code()}" } ?: e.message
+                }
             } finally {
                 loading = false
             }
@@ -116,14 +124,17 @@ fun ProfileScreen(
             loading = true; error = null
             try {
                 val next = page + 1
-                val res = listingApi.searchListings(
+                listingsRepository.searchListings(
                     sellerId = sid,
                     page = next,
                     pageSize = 20
-                )
-                listings = listings + res.items
-                page = next
-                hasNext = res.hasNext
+                ).onSuccess { res ->
+                    listings = listings + res.items
+                    page = next
+                    hasNext = res.hasNext
+                }.onFailure { e ->
+                    error = e.message
+                }
             } catch (e: Exception) {
                 error = e.message
             } finally {
@@ -137,10 +148,17 @@ fun ProfileScreen(
         scope.launch {
             refreshing = true; error = null
             try {
-                val res = listingApi.searchListings(sellerId = sid, page = 1, pageSize = 20)
-                listings = res.items
-                page = 1
-                hasNext = res.hasNext
+                listingsRepository.searchListings(
+                    sellerId = sid,
+                    page = 1,
+                    pageSize = 20
+                ).onSuccess { res ->
+                    listings = res.items
+                    page = 1
+                    hasNext = res.hasNext
+                }.onFailure { e ->
+                    error = e.message
+                }
             } catch (e: Exception) {
                 error = e.message
             } finally {
@@ -152,8 +170,8 @@ fun ProfileScreen(
     // Verificación de dueño
     suspend fun isOwner(listingId: String, expectedUserId: String): Boolean {
         return runCatching {
-            val d: ListingDetailDto = listingApi.getListingDetail(listingId)
-            d.sellerId == expectedUserId
+            val result = listingsRepository.getListingDetail(listingId, preferCache = true)
+            result.detail.sellerId == expectedUserId
         }.getOrDefault(false)
     }
 
