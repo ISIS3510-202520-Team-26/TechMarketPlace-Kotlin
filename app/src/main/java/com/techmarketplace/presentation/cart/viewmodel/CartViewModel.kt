@@ -10,15 +10,11 @@ import com.techmarketplace.data.repository.cart.CartRepositoryImpl
 import com.techmarketplace.data.storage.CartPreferences
 import com.techmarketplace.data.storage.cart.CartLocalDataSource
 import com.techmarketplace.data.storage.dao.CartDatabaseProvider
-import com.techmarketplace.data.work.OrderPlacementWorker
 import com.techmarketplace.domain.cart.CartItemUpdate
 import com.techmarketplace.domain.cart.CartState
 import com.techmarketplace.domain.cart.CartVariantDetail
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
@@ -31,9 +27,6 @@ class CartViewModel(
     private val repository = CartRepositoryImpl(localDataSource, connectivityFlow, viewModelScope)
 
     val state: StateFlow<CartState> = repository.cartState
-
-    private val _events = MutableSharedFlow<CartEvent>()
-    val events: SharedFlow<CartEvent> = _events.asSharedFlow()
 
     init {
         viewModelScope.launch {
@@ -65,17 +58,6 @@ class CartViewModel(
         viewModelScope.launch { repository.onLogin() }
     }
 
-    fun checkout() {
-        viewModelScope.launch {
-            if (state.value.items.isEmpty()) {
-                _events.emit(CartEvent.Error("Your cart is empty"))
-                return@launch
-            }
-            OrderPlacementWorker.enqueue(getApplication())
-            _events.emit(CartEvent.CheckoutScheduled)
-        }
-    }
-
     fun clearErrorMessage() {
         viewModelScope.launch { repository.clearErrorMessage() }
     }
@@ -91,10 +73,5 @@ class CartViewModel(
                 return CartViewModel(app, local, connectivity) as T
             }
         }
-    }
-
-    sealed interface CartEvent {
-        object CheckoutScheduled : CartEvent
-        data class Error(val message: String) : CartEvent
     }
 }

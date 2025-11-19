@@ -55,7 +55,6 @@ import com.techmarketplace.core.ui.GreenScaffold
 import com.techmarketplace.domain.cart.CartItem
 import com.techmarketplace.domain.cart.CartState
 import com.techmarketplace.presentation.cart.viewmodel.CartViewModel
-import com.techmarketplace.presentation.cart.viewmodel.CartViewModel.CartEvent
 import coil.compose.AsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
@@ -67,7 +66,8 @@ import java.util.Locale
 @Composable
 fun MyCartScreen(
     viewModel: CartViewModel,
-    onNavigateBottom: (BottomItem) -> Unit
+    onNavigateBottom: (BottomItem) -> Unit,
+    onCheckout: () -> Unit
 ) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
@@ -80,19 +80,6 @@ fun MyCartScreen(
         state.errorMessage?.let { message ->
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
             viewModel.clearErrorMessage()
-        }
-    }
-
-    LaunchedEffect(viewModel) {
-        viewModel.events.collect { event ->
-            when (event) {
-                CartEvent.CheckoutScheduled -> Toast.makeText(
-                    context,
-                    "Order queued – we'll keep trying if you're offline",
-                    Toast.LENGTH_SHORT
-                ).show()
-                is CartEvent.Error -> Toast.makeText(context, event.message, Toast.LENGTH_SHORT).show()
-            }
         }
     }
 
@@ -118,7 +105,7 @@ fun MyCartScreen(
             totalLabel = formatPrice(totalCents, totalCurrency),
             isOffline = state.isOffline,
             hasItems = state.items.isNotEmpty(),
-            onCheckout = { viewModel.checkout() },
+            onCheckout = onCheckout,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 8.dp)
@@ -406,5 +393,3 @@ private fun RoundIconBell() {
         Box(Modifier.size(40.dp))
     }
 }
-
-
