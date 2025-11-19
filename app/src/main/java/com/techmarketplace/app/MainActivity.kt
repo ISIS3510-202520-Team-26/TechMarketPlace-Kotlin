@@ -51,6 +51,7 @@ import com.techmarketplace.presentation.auth.view.RegisterScreen
 import com.techmarketplace.presentation.auth.viewmodel.LoginViewModel
 import com.techmarketplace.presentation.cart.view.MyCartScreen
 import com.techmarketplace.presentation.cart.viewmodel.CartViewModel
+import com.techmarketplace.presentation.demand.view.DemandAnalyticsRoute
 import com.techmarketplace.presentation.home.view.AddProductRoute
 import com.techmarketplace.presentation.home.view.HomeRoute
 import com.techmarketplace.presentation.onboarding.view.WelcomeScreen
@@ -303,6 +304,12 @@ class MainActivity : ComponentActivity() {
                                             launchSingleTop = true
                                             restoreState = true
                                         }
+                                    },
+                                    onOpenDemand = { sellerId: String ->
+                                        nav.navigate("demand/$sellerId") {
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
                                     }
                                 )
                             }
@@ -310,6 +317,14 @@ class MainActivity : ComponentActivity() {
                             composable("telemetry/{sellerId}") { backStackEntry ->
                                 val sellerId = backStackEntry.arguments?.getString("sellerId") ?: return@composable
                                 TelemetryRoute(
+                                    sellerId = sellerId,
+                                    onBack = { nav.popBackStack() }
+                                )
+                            }
+
+                            composable("demand/{sellerId}") { entry ->
+                                val sellerId = entry.arguments?.getString("sellerId") ?: return@composable
+                                DemandAnalyticsRoute(
                                     sellerId = sellerId,
                                     onBack = { nav.popBackStack() }
                                 )

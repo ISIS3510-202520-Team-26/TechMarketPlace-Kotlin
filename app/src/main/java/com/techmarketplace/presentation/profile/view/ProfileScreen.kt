@@ -46,7 +46,8 @@ fun ProfileScreen(
     onNavigateBottom: (BottomItem) -> Unit,
     onOpenListing: (String) -> Unit,
     onSignOut: () -> Unit,
-    onOpenTelemetry: (String) -> Unit
+    onOpenTelemetry: (String) -> Unit,
+    onOpenDemand: (String) -> Unit
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -316,6 +317,22 @@ fun ProfileScreen(
                             shape = RoundedCornerShape(28.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = GreenDark, contentColor = Color.White)
                         ) { Text("Cerrar sesión") }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            val sid = userId
+                            if (sid == null) {
+                                scope.launch { snackbar.showSnackbar("Usuario no cargado aún.") }
+                            } else {
+                                onOpenDemand(sid)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp)
+                    ) {
+                        Text("Radar de demanda")
                     }
 
                     Spacer(Modifier.height(16.dp))
