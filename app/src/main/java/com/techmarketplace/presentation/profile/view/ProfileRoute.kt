@@ -9,12 +9,14 @@ fun ProfileRoute(
     onNavigateBottom: (BottomItem) -> Unit,
     onOpenListing: (String) -> Unit,
     onSignOut: () -> Unit,
-    onOpenTelemetry: (String) -> Unit
+    onOpenTelemetry: (String) -> Unit,
+    onOpenDemand: (String) -> Unit
 ) {
     ProfileScreen(
         onNavigateBottom = onNavigateBottom,
         onOpenListing = onOpenListing,
         onSignOut = onSignOut,
-        onOpenTelemetry = onOpenTelemetry
+        onOpenTelemetry = onOpenTelemetry,
+        onOpenDemand = onOpenDemand
     )
 }

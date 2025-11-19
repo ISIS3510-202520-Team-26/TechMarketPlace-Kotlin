@@ -8,6 +8,7 @@ import com.techmarketplace.data.remote.api.TelemetryBatch
 import com.techmarketplace.data.remote.api.TelemetryEvent
 import com.techmarketplace.data.remote.dto.toEntity
 import com.techmarketplace.data.storage.dao.SellerMetricsDao
+import com.techmarketplace.data.storage.dao.SellerResponseMetricsEntity
 import com.techmarketplace.data.storage.dao.TelemetryDatabaseProvider
 import com.techmarketplace.data.storage.dao.toDomain
 import com.techmarketplace.data.telemetry.TelemetryAnalytics
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import retrofit2.HttpException
 
 class TelemetryRepositoryImpl(
     private val api: TelemetryApi,
@@ -41,9 +43,27 @@ class TelemetryRepositoryImpl(
         dao.getMetrics(sellerId)?.toDomain()
 
     override suspend fun refreshSellerResponseMetrics(sellerId: String) {
-        val dto = api.getSellerResponseMetrics(sellerId)
-        val entity = dto.toEntity(now())
-        dao.insertMetrics(entity)
+        try {
+            val dto = api.getSellerResponseMetrics(sellerId)
+            val entity = dto.toEntity(now())
+            dao.insertMetrics(entity)
+        } catch (http: HttpException) {
+            if (http.code() == 404) {
+                dao.insertMetrics(
+                    SellerResponseMetricsEntity(
+                        sellerId = sellerId,
+                        responseRate = 0.0,
+                        averageResponseMinutes = 0.0,
+                        totalConversations = 0,
+                        ranking = emptyList(),
+                        fetchedAt = now(),
+                        updatedAtIso = null
+                    )
+                )
+            } else {
+                throw http
+            }
+        }
     }
 
     override suspend fun isCacheExpired(sellerId: String, ttlMillis: Long): Boolean {

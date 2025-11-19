@@ -51,11 +51,14 @@ import com.techmarketplace.presentation.auth.view.RegisterScreen
 import com.techmarketplace.presentation.auth.viewmodel.LoginViewModel
 import com.techmarketplace.presentation.cart.view.MyCartScreen
 import com.techmarketplace.presentation.cart.viewmodel.CartViewModel
+import com.techmarketplace.presentation.demand.view.DemandAnalyticsRoute
 import com.techmarketplace.presentation.home.view.AddProductRoute
 import com.techmarketplace.presentation.home.view.HomeRoute
 import com.techmarketplace.presentation.onboarding.view.WelcomeScreen
 import com.techmarketplace.presentation.orders.view.OrdersRoute
 import com.techmarketplace.presentation.orders.viewmodel.OrdersViewModel
+import com.techmarketplace.presentation.payments.view.PaymentsRoute
+import com.techmarketplace.presentation.payments.viewmodel.PaymentsViewModel
 import com.techmarketplace.presentation.product.view.ProductDetailRoute
 import com.techmarketplace.presentation.profile.view.ProfileRoute
 import com.techmarketplace.presentation.telemetry.view.TelemetryRoute
@@ -154,6 +157,7 @@ class MainActivity : ComponentActivity() {
 
                     val cartViewModel: CartViewModel = viewModel(factory = CartViewModel.factory(app))
                     val ordersViewModel: OrdersViewModel = viewModel(factory = OrdersViewModel.factory(app))
+                    val paymentsViewModel: PaymentsViewModel = viewModel(factory = PaymentsViewModel.factory(app))
 
                     LaunchedEffect(sessionState) {
                         if (sessionState == SessionState.Authenticated) {
@@ -275,7 +279,19 @@ class MainActivity : ComponentActivity() {
                             composable(BottomItem.Cart.route) {
                                 MyCartScreen(
                                     viewModel = cartViewModel,
-                                    onNavigateBottom = { navigateBottom(BottomItem.Home) }
+                                    onNavigateBottom = { navigateBottom(BottomItem.Home) },
+                                    onCheckout = {
+                                        nav.navigate("checkout/payment") {
+                                            launchSingleTop = true
+                                        }
+                                    }
+                                )
+                            }
+                            composable("checkout/payment") {
+                                PaymentsRoute(
+                                    viewModel = paymentsViewModel,
+                                    onBack = { nav.popBackStack() },
+                                    onOpenOrders = { navigateBottom(BottomItem.Order) }
                                 )
                             }
 
@@ -303,6 +319,12 @@ class MainActivity : ComponentActivity() {
                                             launchSingleTop = true
                                             restoreState = true
                                         }
+                                    },
+                                    onOpenDemand = { sellerId: String ->
+                                        nav.navigate("demand/$sellerId") {
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
                                     }
                                 )
                             }
@@ -310,6 +332,14 @@ class MainActivity : ComponentActivity() {
                             composable("telemetry/{sellerId}") { backStackEntry ->
                                 val sellerId = backStackEntry.arguments?.getString("sellerId") ?: return@composable
                                 TelemetryRoute(
+                                    sellerId = sellerId,
+                                    onBack = { nav.popBackStack() }
+                                )
+                            }
+
+                            composable("demand/{sellerId}") { entry ->
+                                val sellerId = entry.arguments?.getString("sellerId") ?: return@composable
+                                DemandAnalyticsRoute(
                                     sellerId = sellerId,
                                     onBack = { nav.popBackStack() }
                                 )

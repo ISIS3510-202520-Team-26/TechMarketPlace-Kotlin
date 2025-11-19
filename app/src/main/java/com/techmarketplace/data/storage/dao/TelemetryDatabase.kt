@@ -7,13 +7,14 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
 @Database(
-    entities = [SellerResponseMetricsEntity::class],
-    version = 1,
+    entities = [SellerResponseMetricsEntity::class, SellerDemandSnapshotEntity::class],
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(TelemetryTypeConverters::class)
 abstract class TelemetryDatabase : RoomDatabase() {
     abstract fun sellerMetricsDao(): SellerMetricsDao
+    abstract fun sellerDemandDao(): SellerDemandDao
 }
 
 object TelemetryDatabaseProvider {
