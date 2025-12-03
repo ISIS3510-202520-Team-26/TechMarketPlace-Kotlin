@@ -184,11 +184,15 @@ object LoginTelemetry {
         categoryName: String?,
         brandId: String?,
         brandName: String?,
-        priceCents: Int?,
+        priceCents: Int?,          // mantenemos Int? para no tocar call sites
         currency: String?
     ) {
         scope.launch {
-            sendListingViewed(listingId, title, categoryId, categoryName, brandId, brandName, priceCents, currency)
+            sendListingViewed(
+                listingId, title, categoryId, categoryName, brandId, brandName,
+                priceCents?.toLong(),   // <-- convertimos a Long?
+                currency
+            )
         }
     }
 
@@ -200,7 +204,7 @@ object LoginTelemetry {
         categoryName: String?,
         brandId: String?,
         brandName: String?,
-        priceCents: Int?,
+        priceCents: Long?,
         currency: String?
     ) = sendListingViewed(listingId, title, categoryId, categoryName, brandId, brandName, priceCents, currency)
 
@@ -212,7 +216,7 @@ object LoginTelemetry {
         categoryName: String?,
         brandId: String?,
         brandName: String?,
-        priceCents: Int?,
+        priceCents: Long?,
         currency: String?
     ) {
         val props: Map<String, String?> = mapOf(
@@ -282,7 +286,7 @@ object LoginTelemetry {
         categoryName: String?,
         brandId: String?,
         brandName: String?,
-        priceCents: Int,
+        priceCents: Long,
         currency: String?,
         quantity: Int? = null,
         condition: String? = null
@@ -311,7 +315,7 @@ object LoginTelemetry {
         categoryName: String?,
         brandId: String?,
         brandName: String?,
-        priceCents: Int,
+        priceCents: Long,
         currency: String?,
         quantity: Int? = null,
         condition: String? = null
@@ -336,7 +340,7 @@ object LoginTelemetry {
         categoryName: String?,
         brandId: String?,
         brandName: String?,
-        priceCents: Int,
+        priceCents: Long,
         currency: String?,
         quantity: Int? = null,
         condition: String? = null

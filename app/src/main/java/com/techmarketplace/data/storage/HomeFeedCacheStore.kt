@@ -21,7 +21,7 @@ private val Context.homeFeedCacheDataStore: DataStore<Preferences> by preference
     name = "home_feed_cache"
 )
 
-private const val DEFAULT_CACHE_LIMIT = 20
+private const val DEFAULT_CACHE_LIMIT = 120
 private val DEFAULT_CACHE_TTL_MILLIS: Long = TimeUnit.MINUTES.toMillis(2)
 
 class HomeFeedCacheStore @JvmOverloads constructor(

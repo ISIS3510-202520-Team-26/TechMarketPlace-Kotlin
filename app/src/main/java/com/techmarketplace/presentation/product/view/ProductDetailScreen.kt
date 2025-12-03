@@ -68,7 +68,6 @@ import com.techmarketplace.data.remote.api.ImagesApi
 import com.techmarketplace.data.remote.api.TelemetryBatch
 import com.techmarketplace.data.remote.api.TelemetryEvent
 import com.techmarketplace.data.remote.dto.ListingDetailDto
-import com.techmarketplace.data.repository.ListingDetailResult
 import com.techmarketplace.data.repository.ListingsRepository
 import com.techmarketplace.data.storage.HomeFeedCacheStore
 import com.techmarketplace.data.storage.ListingDetailCacheStore
@@ -527,7 +526,7 @@ private fun AttrRow(label: String, value: String?) {
     }
 }
 
-private fun priceLabel(priceCents: Int, currency: String?): String {
+private fun priceLabel(priceCents: Long, currency: String?): String {
     return if (currency.isNullOrBlank()) priceCents.toString()
     else "$currency ${priceCents.toDouble()}"
 }

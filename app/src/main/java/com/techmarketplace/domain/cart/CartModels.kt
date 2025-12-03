@@ -19,7 +19,7 @@ data class CartItem(
     val productId: String,
     val title: String,
     val quantity: Int,
-    val priceCents: Int,
+    val priceCents: Long,
     val currency: String,
     val variantDetails: List<CartVariantDetail> = emptyList(),
     val thumbnailUrl: String? = null,
@@ -27,7 +27,7 @@ data class CartItem(
     val expiresAtEpochMillis: Long? = null,
     val pendingOperation: CartSyncOperation? = null
 ) {
-    val totalPriceCents: Int get() = priceCents * quantity
+    val totalPriceCents: Long get() = priceCents * quantity
 }
 
 data class CartState(
@@ -43,7 +43,7 @@ data class CartItemUpdate(
     val serverId: String? = null,
     val productId: String,
     val title: String,
-    val priceCents: Int,
+    val priceCents: Long,
     val currency: String,
     val quantity: Int,
     val variantDetails: List<CartVariantDetail> = emptyList(),
