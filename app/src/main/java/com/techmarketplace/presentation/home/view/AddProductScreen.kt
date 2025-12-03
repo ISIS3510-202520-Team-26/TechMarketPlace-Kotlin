@@ -2,9 +2,11 @@ package com.techmarketplace.presentation.home.view
 
 import kotlin.math.roundToLong
 
+import android.Manifest
 import android.app.Application
 import android.content.ContentValues
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.ConnectivityManager
@@ -72,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.content.ContextCompat
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.GoogleMap
@@ -84,6 +87,7 @@ import com.techmarketplace.data.remote.api.ListingApi
 import com.techmarketplace.data.remote.dto.CatalogItemDto
 import com.techmarketplace.data.storage.LocationStore
 import com.techmarketplace.data.storage.TokenStore
+import com.techmarketplace.data.storage.pendingqueue.PendingPublishRepository
 import com.techmarketplace.presentation.listings.viewmodel.ListingsViewModel
 import java.io.File
 import java.io.FileOutputStream
@@ -91,6 +95,8 @@ import java.text.Normalizer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 
 /* ===================== LIMITS ===================== */
 private const val MAX_TITLE = 80
@@ -157,112 +163,8 @@ private object AddProductCatalogCache {
     }
 }
 
-/* ===================== SIMPLE LOCAL PENDING QUEUE ===================== */
-/* No external deps, line-based encoding. */
-private object PendingQueue {
-    private const val FILE = "addproduct_pending_queue_v1"
-    private const val KEY = "listings"
-    private const val SEP = "|||"
+/* ===================== CONNECTIVITY ===================== */
 
-    data class Item(
-        val title: String,
-        val description: String,
-        val categoryId: String,
-        val brandId: String?,
-        val priceCents: Long,
-        val currency: String,
-        val condition: String,
-        val quantity: Int,
-        val imageUri: String? // String version of Uri
-    )
-
-    private fun esc(s: String) = s.replace("\n", " ").replace(SEP, " ")
-    private fun enc(i: Item) = listOf(
-        esc(i.title), esc(i.description), esc(i.categoryId),
-        esc(i.brandId ?: ""), i.priceCents.toString(), esc(i.currency),
-        esc(i.condition), i.quantity.toString(), esc(i.imageUri ?: "")
-    ).joinToString(SEP)
-
-    private fun dec(line: String): Item? {
-        val p = line.split(SEP)
-        if (p.size < 9) return null
-        return Item(
-            title = p[0], description = p[1], categoryId = p[2],
-            brandId = p[3].ifBlank { null }, priceCents = p[4].toLongOrNull() ?: 0,
-            currency = p[5], condition = p[6], quantity = p[7].toIntOrNull() ?: 1,
-            imageUri = p[8].ifBlank { null }
-        )
-    }
-
-    private fun getAll(ctx: Context): MutableList<Item> {
-        val sp = ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE)
-        val raw = sp.getString(KEY, "") ?: ""
-        if (raw.isBlank()) return mutableListOf()
-        return raw.lines().filter { it.isNotBlank() }.mapNotNull { dec(it) }.toMutableList()
-    }
-
-    private fun saveAll(ctx: Context, items: List<Item>) {
-        val s = items.joinToString("\n") { enc(it) }
-        ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().putString(KEY, s).apply()
-    }
-
-    fun enqueue(ctx: Context, item: Item) {
-        val all = getAll(ctx)
-        all.add(item)
-        saveAll(ctx, all)
-    }
-
-    /**
-     * Publica en orden los pendientes mientras haya conexión.
-     * Si uno falla, se detiene y deja el resto en la cola.
-     */
-    fun flushWhenOnline(
-        ctx: Context,
-        isOnline: Boolean,
-        vm: ListingsViewModel
-    ) {
-        if (!isOnline) return
-
-        val all = getAll(ctx)
-        if (all.isEmpty()) return
-
-        val iterator = all.iterator()
-
-        fun publishNext() {
-            if (!iterator.hasNext()) {
-                // Nada más que publicar, guardar estado final (cola posiblemente vacía)
-                saveAll(ctx, all)
-                return
-            }
-
-            val it = iterator.next()
-            vm.createListing(
-                title = it.title,
-                description = it.description,
-                categoryId = it.categoryId,
-                brandId = it.brandId,
-                priceCents = it.priceCents,
-                currency = it.currency,
-                condition = it.condition,
-                quantity = it.quantity,
-                imageUri = it.imageUri?.let { s -> runCatching { Uri.parse(s) }.getOrNull() }
-            ) { ok, _ ->
-                if (ok) {
-                    iterator.remove()
-                    saveAll(ctx, all)
-                    publishNext() // seguir con el siguiente
-                } else {
-                    // Falló este publish → dejamos la cola como está y salimos
-                    saveAll(ctx, all)
-                }
-            }
-        }
-
-        publishNext()
-    }
-}
-
-/** Connectivity as State<Boolean> */
 @Composable
 private fun rememberIsOnline(): State<Boolean> {
     val ctx = LocalContext.current
@@ -281,6 +183,7 @@ private fun rememberIsOnline(): State<Boolean> {
     }
     return online
 }
+
 private fun isCurrentlyOnline(cm: ConnectivityManager): Boolean {
     val n = cm.activeNetwork ?: return false
     val c = cm.getNetworkCapabilities(n) ?: return false
@@ -289,6 +192,73 @@ private fun isCurrentlyOnline(cm: ConnectivityManager): Boolean {
             c.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
     val validated = c.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     return hasTransport && validated
+}
+
+/* ===================== HELPERS ROOM FLUSH ===================== */
+
+/** Adaptador suspend para createListing basado en callback. */
+private suspend fun ListingsViewModel.createListingAwait(
+    title: String,
+    description: String,
+    categoryId: String,
+    brandId: String?,
+    priceCents: Long,
+    currency: String,
+    condition: String,
+    quantity: Int,
+    imageUri: Uri?
+): Pair<Boolean, String?> = suspendCoroutine { cont ->
+    createListing(
+        title = title,
+        description = description,
+        categoryId = categoryId,
+        brandId = brandId,
+        priceCents = priceCents,
+        currency = currency,
+        condition = condition,
+        quantity = quantity,
+        imageUri = imageUri
+    ) { ok, msg ->
+        cont.resume(ok to msg)
+    }
+}
+
+/** Saca lotes de Room y los intenta publicar en orden. */
+private suspend fun flushPendingPublishQueue(
+    vm: ListingsViewModel,
+    repo: PendingPublishRepository
+) {
+    while (true) {
+        val batch = repo.nextBatch(limit = 3)
+        if (batch.isEmpty()) break
+
+        for (entity in batch) {
+            // Marcamos como "SENDING"
+            repo.markSending(entity.id)
+
+            val uri = entity.imageUri?.let { runCatching { Uri.parse(it) }.getOrNull() }
+
+            val (ok, msg) = vm.createListingAwait(
+                title = entity.title,
+                description = entity.description,
+                categoryId = entity.categoryId,
+                brandId = entity.brandId,
+                priceCents = entity.priceCents,
+                currency = entity.currency,
+                condition = entity.condition,
+                quantity = entity.quantity,
+                imageUri = uri
+            )
+
+            if (ok) {
+                repo.markSent(entity.id)
+            } else {
+                // Lo marcamos como failed y dejamos el resto en cola
+                repo.markFailed(entity.id, msg)
+                return
+            }
+        }
+    }
 }
 
 /* ===================== ROUTE ===================== */
@@ -306,6 +276,9 @@ fun AddProductRoute(
     LaunchedEffect(Unit) { vm.refreshCatalogs() }
 
     val listingApi: ListingApi = remember { ApiClient.listingApi() }
+
+    // Repo de Room para pending queue
+    val pendingRepo = remember { PendingPublishRepository(ctx) }
 
     // Auth gate
     var hasToken by remember { mutableStateOf(false) }
@@ -332,10 +305,12 @@ fun AddProductRoute(
         }
     }
 
-    // Auto-flush pending posts when we are online (and also on first composition)
+    // Auto-flush pending posts usando Room cuando haya conexión
     LaunchedEffect(isOnline) {
         if (isOnline) {
-            PendingQueue.flushWhenOnline(ctx, isOnline, vm)
+            scope.launch(Dispatchers.IO) {
+                flushPendingPublishQueue(vm, pendingRepo)
+            }
         }
     }
 
@@ -348,6 +323,7 @@ fun AddProductRoute(
         onCancel = onCancel,
         onSave = { title, description, categoryId, brandId, priceText, condition, quantity, imageUri ->
             val priceCents: Long = ((priceText.toDoubleOrNull() ?: 0.0)).roundToLong()
+            val qtyInt = quantity.toIntOrNull() ?: 1
 
             scope.launch(Dispatchers.IO) {
                 if (!hasToken) {
@@ -358,37 +334,37 @@ fun AddProductRoute(
                 }
 
                 // Persist image (copy to app cache) to avoid later permission issues
-                val persistedImage = withContext(Dispatchers.IO) {
-                    imageUri?.let { safeCopyUriToCache(ctx, it) } ?: imageUri
-                }
+                val persistedImage = imageUri?.let { safeCopyUriToCache(ctx, it) } ?: imageUri
 
                 if (isOnline) {
                     withContext(Dispatchers.Main) {
                         vm.createListing(
-                            title = title,
-                            description = description,
+                            title = title.trim(),
+                            description = description.trim(),
                             categoryId = categoryId,
                             brandId = brandId.ifBlank { null },
                             priceCents = priceCents,
                             currency = "COP",
                             condition = condition,
-                            quantity = quantity.toIntOrNull() ?: 1,
+                            quantity = qtyInt,
                             imageUri = persistedImage
                         ) { ok, message ->
                             if (ok) {
                                 Toast.makeText(ctx, message ?: "Listing created!", Toast.LENGTH_SHORT).show()
                                 onSaved()
                             } else {
-                                // Enqueue and notify
+                                // Encolar en Room y avisar
                                 scope.launch(Dispatchers.IO) {
-                                    PendingQueue.enqueue(
-                                        ctx,
-                                        PendingQueue.Item(
-                                            title, description, categoryId,
-                                            brandId.ifBlank { null }, priceCents, "COP",
-                                            condition, quantity.toIntOrNull() ?: 1,
-                                            persistedImage?.toString()
-                                        )
+                                    pendingRepo.enqueue(
+                                        title = title.trim(),
+                                        description = description.trim(),
+                                        categoryId = categoryId,
+                                        brandId = brandId.ifBlank { null },
+                                        priceCents = priceCents,
+                                        currency = "COP",
+                                        condition = condition,
+                                        quantity = qtyInt,
+                                        imageUri = persistedImage
                                     )
                                     withContext(Dispatchers.Main) {
                                         Toast.makeText(
@@ -403,18 +379,24 @@ fun AddProductRoute(
                         }
                     }
                 } else {
-                    // Offline: enqueue
-                    PendingQueue.enqueue(
-                        ctx,
-                        PendingQueue.Item(
-                            title, description, categoryId,
-                            brandId.ifBlank { null }, priceCents, "COP",
-                            condition, quantity.toIntOrNull() ?: 1,
-                            persistedImage?.toString()
-                        )
+                    // Offline: encolar directamente en Room
+                    pendingRepo.enqueue(
+                        title = title.trim(),
+                        description = description.trim(),
+                        categoryId = categoryId,
+                        brandId = brandId.ifBlank { null },
+                        priceCents = priceCents,
+                        currency = "COP",
+                        condition = condition,
+                        quantity = qtyInt,
+                        imageUri = persistedImage
                     )
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(ctx, "Saved offline. It will auto-publish when online.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(
+                            ctx,
+                            "Saved offline. It will auto-publish when online.",
+                            Toast.LENGTH_LONG
+                        ).show()
                         onSaved()
                     }
                 }
@@ -504,6 +486,23 @@ fun AddProductScreen(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
         if (success) imageUri = cameraTempUri
+    }
+
+    // 🔐 Launcher para pedir permiso de cámara en runtime
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            val temp = createCameraImageUri(ctx)
+            if (temp == null) {
+                Toast.makeText(ctx, "Cannot open camera.", Toast.LENGTH_SHORT).show()
+            } else {
+                cameraTempUri = temp
+                takePicture.launch(temp)
+            }
+        } else {
+            Toast.makeText(ctx, "Camera permission denied.", Toast.LENGTH_SHORT).show()
+        }
     }
 
     // Location (preview only)
@@ -603,12 +602,21 @@ fun AddProductScreen(
 
                     OutlinedButton(
                         onClick = {
-                            val temp = createCameraImageUri(ctx)
-                            if (temp == null) {
-                                Toast.makeText(ctx, "Cannot open camera.", Toast.LENGTH_SHORT).show()
+                            val hasPermission = ContextCompat.checkSelfPermission(
+                                ctx,
+                                Manifest.permission.CAMERA
+                            ) == PackageManager.PERMISSION_GRANTED
+
+                            if (hasPermission) {
+                                val temp = createCameraImageUri(ctx)
+                                if (temp == null) {
+                                    Toast.makeText(ctx, "Cannot open camera.", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    cameraTempUri = temp
+                                    takePicture.launch(temp)
+                                }
                             } else {
-                                cameraTempUri = temp
-                                takePicture.launch(temp)
+                                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                             }
                         },
                         shape = RoundedCornerShape(24.dp),
