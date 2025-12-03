@@ -16,9 +16,18 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Search
@@ -47,17 +56,28 @@ import com.techmarketplace.core.ui.BottomItem
 import com.techmarketplace.core.imageloading.prefetchListingImages
 import com.techmarketplace.data.remote.ApiClient
 import com.techmarketplace.data.remote.api.ImagesApi
+import com.techmarketplace.data.remote.dto.ListingSummaryDto
 import com.techmarketplace.data.remote.dto.SearchListingsResponse
 import com.techmarketplace.data.repository.ListingsRepository
+import com.techmarketplace.data.repository.RecommendedRepository
 import com.techmarketplace.data.repository.TelemetryRepositoryImpl
 import com.techmarketplace.data.storage.CategoryClickStore
 import com.techmarketplace.data.storage.HomeFeedCacheStore
 import com.techmarketplace.data.storage.ListingDetailCacheStore
 import com.techmarketplace.data.storage.LocationStore
+import com.techmarketplace.data.storage.cache.RecommendedMemoryCache
 import com.techmarketplace.data.storage.getAndSaveLocation
 import com.techmarketplace.data.telemetry.LoginTelemetry
+import com.techmarketplace.data.storage.dao.TelemetryDatabaseProvider
+import com.techmarketplace.data.work.RecommendedSyncWorker
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import retrofit2.HttpException
 
 /* -------------------- UI models -------------------- */
@@ -75,6 +95,12 @@ private data class UiProduct(
     val brandName: String?,
     val imageUrl: String?,
     val cacheKey: String?
+)
+
+private data class UiRecommendedRow(
+    val categoryId: String,
+    val categoryName: String?,
+    val items: List<UiProduct>
 )
 
 private val GreenDark = Color(0xFF0F4D3A)
@@ -196,6 +222,15 @@ fun HomeRoute(
     val listingsRepository = remember {
         ListingsRepository(api, locationStore, homeFeedCacheStore, listingDetailCacheStore)
     }
+    val telemetryDb = remember { TelemetryDatabaseProvider.get(context) }
+    val recommendedRepository = remember {
+        RecommendedRepository(
+            analyticsApi = ApiClient.analyticsApi(),
+            listingApi = api,
+            dao = telemetryDb.recommendedDao(),
+            memoryCache = RecommendedMemoryCache()
+        )
+    }
     val telemetryRepository = remember(context) { TelemetryRepositoryImpl.create(context) }
     val isOnline by rememberIsOnline()
 
@@ -268,6 +303,9 @@ fun HomeRoute(
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var categories by remember { mutableStateOf<List<UiCategory>>(emptyList()) }
+    var recommended by remember { mutableStateOf<List<UiRecommendedRow>>(emptyList()) }
+    var recommendedLoading by remember { mutableStateOf(false) }
+    var recommendedError by remember { mutableStateOf<String?>(null) }
 
     // -------- Filtros (saveable + persistentes) --------
     var selectedCat by rememberSaveable { mutableStateOf<String?>(null) }
@@ -327,6 +365,51 @@ fun HomeRoute(
         } catch (_: Exception) {
             "url:${imageUrl.lowercase()}"
         }
+    }
+
+    suspend fun ListingSummaryDto.toUiProduct(): UiProduct = withContext(Dispatchers.IO) {
+        val firstPhoto = photos.firstOrNull()
+
+        val imageUrl: String? = when {
+            firstPhoto == null -> null
+            !firstPhoto.imageUrl.isNullOrBlank() -> fixEmulatorHost(firstPhoto.imageUrl!!)
+            !firstPhoto.storageKey.isNullOrBlank() -> {
+                runCatching {
+                    val preview = imagesApi.getPreview(firstPhoto.storageKey!!)
+                    fixEmulatorHost(preview.preview_url)
+                }.getOrElse { publicFromObjectKey(firstPhoto.storageKey!!) }
+            }
+            else -> null
+        }
+
+        val cacheKey = stableImageKey(
+            imageUrl = imageUrl,
+            storageKey = firstPhoto?.storageKey
+        )
+
+        val catId: String? = readFieldOrNull<String>(this, "categoryId", "category_id")
+        val catName: String? = readFieldOrNull<String>(this, "categoryName", "category_name")
+        val brId: String? = readFieldOrNull<String>(this, "brandId", "brand_id")
+        val brName: String? = readFieldOrNull<String>(this, "brandName", "brand_name")
+        val curr: String? = readFieldOrNull<String>(this, "currency")
+
+        UiProduct(
+            id = id,
+            title = title,
+            priceCents = priceCents,
+            currency = curr ?: "USD",
+            categoryId = catId,
+            categoryName = catName,
+            brandId = brId,
+            brandName = brName,
+            imageUrl = imageUrl,
+            cacheKey = cacheKey
+        )
+    }
+
+    suspend fun List<ListingSummaryDto>.toUiProducts(): List<UiProduct> = coroutineScope {
+        map { dto -> async { dto.toUiProduct() } }
+            .mapNotNull { runCatching { it.await() }.getOrNull() }
     }
 
     // ---- mapeo a UI + retorno del response para caché ----
@@ -423,6 +506,31 @@ fun HomeRoute(
     }
 
     var fetchJob by remember { mutableStateOf<Job?>(null) }
+    var recommendedJob by remember { mutableStateOf<Job?>(null) }
+
+    fun fetchRecommended() {
+        recommendedJob?.cancel()
+        recommendedJob = scope.launch {
+            recommendedLoading = recommended.isEmpty()
+            recommendedError = null
+            try {
+                val buckets = recommendedRepository.getOrRefresh()
+                val rows = buckets.map { bucket ->
+                    val ui = bucket.listings.toUiProducts()
+                    UiRecommendedRow(
+                        categoryId = bucket.categoryId,
+                        categoryName = bucket.categoryName ?: "Trending",
+                        items = ui
+                    )
+                }.filter { it.items.isNotEmpty() }
+                recommended = rows
+            } catch (t: Throwable) {
+                recommendedError = t.message ?: "Error loading recommended"
+            } finally {
+                recommendedLoading = false
+            }
+        }
+    }
 
     fun fetchListings() {
         fetchJob?.cancel()
@@ -509,6 +617,9 @@ fun HomeRoute(
         if (isOnline) {
             fetchCategories()
             fetchListings()
+            if (recommended.isEmpty()) fetchRecommended()
+        } else if (recommended.isEmpty()) {
+            fetchRecommended() // will read cached if available
         }
     }
 
@@ -540,6 +651,10 @@ fun HomeRoute(
         HomeScreenContent(
             loading = loading,
             error = error,
+            recommendedRows = recommended,
+            recommendedLoading = recommendedLoading,
+            recommendedError = recommendedError,
+            onRetryRecommended = { fetchRecommended() },
             categories = orderedCategories,
             selectedCategoryId = selectedCat,
             onSelectCategory = { id ->
@@ -608,6 +723,10 @@ fun HomeRoute(
 private fun HomeScreenContent(
     loading: Boolean,
     error: String?,
+    recommendedRows: List<UiRecommendedRow>,
+    recommendedLoading: Boolean,
+    recommendedError: String?,
+    onRetryRecommended: () -> Unit,
     categories: List<UiCategory>,
     selectedCategoryId: String?,
     onSelectCategory: (String) -> Unit,
@@ -626,6 +745,14 @@ private fun HomeScreenContent(
     onRadiusChange: (Float) -> Unit,
     isOnline: Boolean
 ) {
+    val gridState = rememberLazyGridState()
+    val dragScope = rememberCoroutineScope()
+    val showRecommended by remember {
+        derivedStateOf {
+            gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset < 50
+        }
+    }
+
     Surface(
         color = Color.White,
         shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
@@ -685,6 +812,47 @@ private fun HomeScreenContent(
             )
 
             Spacer(Modifier.height(12.dp))
+
+            AnimatedVisibility(visible = showRecommended) {
+                val compactRecs = remember(recommendedRows) {
+                    recommendedRows.take(1).map { row ->
+                        row.copy(items = row.items.take(6))
+                    }
+                }
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 320.dp)
+                        .draggable(
+                            orientation = Orientation.Vertical,
+                            state = rememberDraggableState { delta ->
+                                dragScope.launch { gridState.scrollBy(-delta) }
+                            }
+                        )
+                ) {
+                    Text("Recommended for you", color = GreenDark, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(8.dp))
+                    when {
+                        recommendedLoading -> CircularProgressIndicator()
+                        recommendedError != null -> ErrorBlock(recommendedError ?: "Error", onRetry = onRetryRecommended)
+                        compactRecs.isEmpty() -> Text("No recommendations yet.", color = Color(0xFF6B7783))
+                        else -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            compactRecs.forEach { row ->
+                                Text(row.categoryName ?: "Trending", color = GreenDark, fontWeight = FontWeight.Medium)
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    items(row.items, key = { it.id }) { p ->
+                                        RecommendedCard(
+                                            product = p,
+                                            onOpen = { onOpenDetail(p.id) },
+                                            isOnline = isOnline
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(16.dp))
+                }
+            }
 
             LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(categories.size) { i ->
@@ -766,6 +934,7 @@ private fun HomeScreenContent(
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(2),
                         modifier = Modifier.fillMaxSize(),
+                        state = gridState,
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         contentPadding = PaddingValues(bottom = 16.dp)
@@ -810,6 +979,60 @@ private fun ErrorBlock(message: String, onRetry: () -> Unit) {
 private fun RoundIcon(icon: ImageVector, onClick: () -> Unit) {
     Surface(color = Color(0xFFF5F5F5), shape = CircleShape, onClick = onClick) {
         Icon(icon, contentDescription = null, tint = GreenDark, modifier = Modifier.padding(12.dp))
+    }
+}
+
+@Composable
+private fun RecommendedCard(
+    product: UiProduct,
+    onOpen: () -> Unit,
+    isOnline: Boolean
+) {
+    val ctx = LocalContext.current
+    val priceText = remember(product.priceCents, product.currency) { formatMoney(product.priceCents, product.currency) }
+
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = Color.White,
+        border = DividerDefaults.color.copy(alpha = 0.15f).let { BorderStroke(1.dp, it) },
+        modifier = Modifier
+            .width(180.dp)
+            .height(230.dp),
+        onClick = onOpen
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFF1F1F1F)
+            ) {
+                if (!product.imageUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(ctx)
+                            .data(product.imageUrl)
+                            .allowHardware(false)
+                            .memoryCacheKey(product.cacheKey)
+                            .diskCacheKey(product.cacheKey)
+                            .memoryCachePolicy(CachePolicy.ENABLED)
+                            .diskCachePolicy(CachePolicy.ENABLED)
+                            .networkCachePolicy(
+                                if (isOnline) CachePolicy.ENABLED else CachePolicy.READ_ONLY
+                            )
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(product.title, color = GreenDark, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(product.brandName.orEmpty(), color = Color(0xFF9AA3AB), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(10.dp))
+            Text(priceText, color = GreenDark, fontWeight = FontWeight.SemiBold)
+        }
     }
 }
 

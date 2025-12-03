@@ -242,6 +242,35 @@ object LoginTelemetry {
                 api.ingest(bearer, TelemetryBatch(listOf(ev)))
             }
         }.onFailure { Log.w(TAG, "ingest failed: ${it.message}") }
+
+        // Also track quick_view feature usage for recommendations (/analytics/bq/5_1)
+        fireQuickView(listingId = listingId, categoryId = categoryId, categoryName = categoryName)
+    }
+
+    fun fireQuickView(listingId: String, categoryId: String?, categoryName: String?) {
+        scope.launch {
+            val props: Map<String, String?> = mapOf(
+                "feature_key" to "quick_view",
+                "category_id" to toStr(categoryId),
+                "category_name" to toStr(categoryName)
+            )
+            val ev = TelemetryEvent(
+                event_type = "feature.used",
+                session_id = sessionId,
+                user_id = null,
+                listing_id = listingId,
+                occurred_at = Instant.now().toString(),
+                properties = props
+            )
+            runCatching {
+                val bearer = authHeaderWithRetry()
+                if (bearer == null) {
+                    Log.w(TAG, "No bearer (quick_view). Evento omitido.")
+                } else {
+                    api.ingest(bearer, TelemetryBatch(listOf(ev)))
+                }
+            }.onFailure { Log.w(TAG, "ingest failed: ${it.message}") }
+        }
     }
 
     // ---------- NUEVO: listing.created ----------

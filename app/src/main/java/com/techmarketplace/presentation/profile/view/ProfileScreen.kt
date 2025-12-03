@@ -104,7 +104,8 @@ fun ProfileScreen(
     onOpenListing: (String) -> Unit,
     onSignOut: () -> Unit,
     onOpenTelemetry: (String) -> Unit,
-    onOpenDemand: (String) -> Unit
+    onOpenDemand: (String) -> Unit,
+    onOpenPriceCoach: (String) -> Unit
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -431,6 +432,14 @@ fun ProfileScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(24.dp)
                     ) { Text("Demand Radar") }
+
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { userId?.let(onOpenPriceCoach) ?: scope.launch { snackbar.showSnackbar("User not loaded yet.") } },
+                        enabled = userId != null,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp)
+                    ) { Text("Price Coach") }
 
                     Spacer(Modifier.height(16.dp))
                     Divider(color = Color(0xFFE6E7EB))

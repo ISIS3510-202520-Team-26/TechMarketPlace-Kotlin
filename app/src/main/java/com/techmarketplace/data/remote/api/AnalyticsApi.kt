@@ -2,6 +2,8 @@ package com.techmarketplace.data.remote.api
 
 import com.techmarketplace.data.remote.dto.BqButtonCountDto
 import com.techmarketplace.data.remote.dto.BqCategoryCountDto
+import com.techmarketplace.data.remote.dto.BqDauDto
+import com.techmarketplace.data.remote.dto.BqGmvDto
 import com.techmarketplace.data.remote.dto.BqQuickViewCountDto
 import retrofit2.http.GET
 import retrofit2.http.Query
@@ -25,4 +27,16 @@ interface AnalyticsApi {
         @Query("start") startIso: String? = null,
         @Query("end") endIso: String? = null
     ): List<BqQuickViewCountDto>
+
+    @GET("analytics/bq/3_1")
+    suspend fun dau(
+        @Query("start") startIso: String? = null,
+        @Query("end") endIso: String? = null
+    ): List<BqDauDto>
+
+    @GET("analytics/bq/4_2")
+    suspend fun gmvByDay(
+        @Query("start") startIso: String? = null,
+        @Query("end") endIso: String? = null
+    ): List<BqGmvDto>
 }
