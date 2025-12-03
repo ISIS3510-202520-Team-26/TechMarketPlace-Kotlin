@@ -8,7 +8,7 @@ data class UserListingEntity(
     @PrimaryKey val id: String,
     val sellerId: String,
     val title: String,
-    val priceCents: Int,
+    val priceCents: Long?,
     val currency: String?,
     val thumbnailKey: String?,
     val thumbnailUrl: String?,

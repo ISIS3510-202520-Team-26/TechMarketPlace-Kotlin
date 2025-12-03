@@ -9,13 +9,13 @@ import kotlinx.serialization.Serializable
 data class LocalOrder(
     val id: String,
     val listingId: String,
-    val totalCents: Int,
+    val totalCents: Long?,
     val currency: String,
     val status: String,
     val createdAt: String? = null,
     val title: String? = null,
     val quantity: Int = 1,
-    val unitPriceCents: Int? = null,
+    val unitPriceCents: Long? = null,
     val thumbnailUrl: String? = null,
     val variantDetails: List<CartVariantDetail> = emptyList()
 )

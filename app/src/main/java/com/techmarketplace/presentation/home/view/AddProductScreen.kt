@@ -1,15 +1,24 @@
 package com.techmarketplace.presentation.home.view
 
+import kotlin.math.roundToLong
+
+import android.Manifest
 import android.app.Application
+import android.content.ContentValues
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -63,9 +72,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.content.ContextCompat
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.GoogleMap
@@ -77,15 +86,19 @@ import com.techmarketplace.data.remote.ApiClient
 import com.techmarketplace.data.remote.api.ListingApi
 import com.techmarketplace.data.remote.dto.CatalogItemDto
 import com.techmarketplace.data.storage.LocationStore
+import com.techmarketplace.data.storage.TokenStore
+import com.techmarketplace.data.storage.pendingqueue.PendingPublishRepository
 import com.techmarketplace.presentation.listings.viewmodel.ListingsViewModel
 import java.io.File
+import java.io.FileOutputStream
 import java.text.Normalizer
-import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 
-/* ===================== CONFIG DE LÍMITES ===================== */
+/* ===================== LIMITS ===================== */
 private const val MAX_TITLE = 80
 private const val MAX_DESC = 600
 private const val MAX_PRICE_LEN = 12
@@ -106,7 +119,149 @@ private fun slugify(input: String): String {
         .replace("-+".toRegex(), "-")
 }
 
-/** ROUTE: conecta VM + pasa catálogos/submit a la Screen */
+/* ===================== OFFLINE CATALOG CACHE (SharedPreferences) ===================== */
+private object AddProductCatalogCache {
+    private const val FILE = "addproduct_catalog_cache"
+    private const val K_CATS = "cats_v1"
+    private const val K_BRANDS = "brands_v1"
+
+    private fun String.safe(): String = replace("\n", " ").replace("||", " ")
+
+    private fun encode(list: List<CatalogItemDto>): String =
+        list.joinToString("\n") { "${it.id.safe()}||${it.name.safe()}" }
+
+    private fun decode(raw: String): List<CatalogItemDto> =
+        raw.lines().filter { it.isNotBlank() }.mapNotNull { line ->
+            val p = line.split("||")
+            val id = p.getOrNull(0)?.trim().orEmpty()
+            val name = p.getOrNull(1)?.trim().orEmpty()
+            if (id.isBlank()) null else CatalogItemDto(id = id, name = name)
+        }
+
+    fun saveCategories(ctx: Context, list: List<CatalogItemDto>) {
+        if (list.isEmpty()) return
+        ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit()
+            .putString(K_CATS, encode(list)).apply()
+    }
+
+    fun loadCategories(ctx: Context): List<CatalogItemDto> {
+        val raw = ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(K_CATS, null)
+            ?: return emptyList()
+        return decode(raw)
+    }
+
+    fun saveBrands(ctx: Context, list: List<CatalogItemDto>) {
+        if (list.isEmpty()) return
+        ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit()
+            .putString(K_BRANDS, encode(list)).apply()
+    }
+
+    fun loadBrands(ctx: Context): List<CatalogItemDto> {
+        val raw = ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(K_BRANDS, null)
+            ?: return emptyList()
+        return decode(raw)
+    }
+}
+
+/* ===================== CONNECTIVITY ===================== */
+
+@Composable
+private fun rememberIsOnline(): State<Boolean> {
+    val ctx = LocalContext.current
+    val cm = remember { ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager }
+    val online = remember { mutableStateOf(isCurrentlyOnline(cm)) }
+    androidx.compose.runtime.DisposableEffect(cm) {
+        val cb = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) { online.value = true }
+            override fun onLost(network: Network) { online.value = isCurrentlyOnline(cm) }
+            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+                online.value = isCurrentlyOnline(cm)
+            }
+        }
+        runCatching { cm.registerDefaultNetworkCallback(cb) }
+        onDispose { runCatching { cm.unregisterNetworkCallback(cb) } }
+    }
+    return online
+}
+
+private fun isCurrentlyOnline(cm: ConnectivityManager): Boolean {
+    val n = cm.activeNetwork ?: return false
+    val c = cm.getNetworkCapabilities(n) ?: return false
+    val hasTransport = c.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+            c.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
+            c.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+    val validated = c.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    return hasTransport && validated
+}
+
+/* ===================== HELPERS ROOM FLUSH ===================== */
+
+/** Adaptador suspend para createListing basado en callback. */
+private suspend fun ListingsViewModel.createListingAwait(
+    title: String,
+    description: String,
+    categoryId: String,
+    brandId: String?,
+    priceCents: Long,
+    currency: String,
+    condition: String,
+    quantity: Int,
+    imageUri: Uri?
+): Pair<Boolean, String?> = suspendCoroutine { cont ->
+    createListing(
+        title = title,
+        description = description,
+        categoryId = categoryId,
+        brandId = brandId,
+        priceCents = priceCents,
+        currency = currency,
+        condition = condition,
+        quantity = quantity,
+        imageUri = imageUri
+    ) { ok, msg ->
+        cont.resume(ok to msg)
+    }
+}
+
+/** Saca lotes de Room y los intenta publicar en orden. */
+private suspend fun flushPendingPublishQueue(
+    vm: ListingsViewModel,
+    repo: PendingPublishRepository
+) {
+    while (true) {
+        val batch = repo.nextBatch(limit = 3)
+        if (batch.isEmpty()) break
+
+        for (entity in batch) {
+            // Marcamos como "SENDING"
+            repo.markSending(entity.id)
+
+            val uri = entity.imageUri?.let { runCatching { Uri.parse(it) }.getOrNull() }
+
+            val (ok, msg) = vm.createListingAwait(
+                title = entity.title,
+                description = entity.description,
+                categoryId = entity.categoryId,
+                brandId = entity.brandId,
+                priceCents = entity.priceCents,
+                currency = entity.currency,
+                condition = entity.condition,
+                quantity = entity.quantity,
+                imageUri = uri
+            )
+
+            if (ok) {
+                repo.markSent(entity.id)
+            } else {
+                // Lo marcamos como failed y dejamos el resto en cola
+                repo.markFailed(entity.id, msg)
+                return
+            }
+        }
+    }
+}
+
+/* ===================== ROUTE ===================== */
 @Composable
 fun AddProductRoute(
     onCancel: () -> Unit,
@@ -115,51 +270,161 @@ fun AddProductRoute(
     val ctx = LocalContext.current
     val app = ctx.applicationContext as Application
     val vm: ListingsViewModel = viewModel(factory = ListingsViewModel.factory(app))
+    val scope = rememberCoroutineScope()
 
     val catalogsState by vm.catalogs.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { vm.refreshCatalogs() }
 
-    // API para crear cat/brand
     val listingApi: ListingApi = remember { ApiClient.listingApi() }
 
+    // Repo de Room para pending queue
+    val pendingRepo = remember { PendingPublishRepository(ctx) }
+
+    // Auth gate
+    var hasToken by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { hasToken = TokenStore(ctx).getAccessTokenOnce()?.isNotBlank() == true }
+
+    // Connectivity
+    val isOnline by rememberIsOnline()
+
+    // Load cached catalogs for offline first paint
+    var cachedCats by remember { mutableStateOf(AddProductCatalogCache.loadCategories(ctx)) }
+    var cachedBrands by remember { mutableStateOf(AddProductCatalogCache.loadBrands(ctx)) }
+
+    // Persist fresh catalogs automatically
+    LaunchedEffect(catalogsState.categories) {
+        if (catalogsState.categories.isNotEmpty()) {
+            AddProductCatalogCache.saveCategories(ctx, catalogsState.categories)
+            cachedCats = catalogsState.categories
+        }
+    }
+    LaunchedEffect(catalogsState.brands) {
+        if (catalogsState.brands.isNotEmpty()) {
+            AddProductCatalogCache.saveBrands(ctx, catalogsState.brands)
+            cachedBrands = catalogsState.brands
+        }
+    }
+
+    // Auto-flush pending posts usando Room cuando haya conexión
+    LaunchedEffect(isOnline) {
+        if (isOnline) {
+            scope.launch(Dispatchers.IO) {
+                flushPendingPublishQueue(vm, pendingRepo)
+            }
+        }
+    }
+
+    val catsForUI = catalogsState.categories.ifEmpty { cachedCats }
+    val brandsForUI = catalogsState.brands.ifEmpty { cachedBrands }
+
     AddProductScreen(
-        categories = catalogsState.categories,
-        brands = catalogsState.brands,
+        categories = catsForUI,
+        brands = brandsForUI,
         onCancel = onCancel,
         onSave = { title, description, categoryId, brandId, priceText, condition, quantity, imageUri ->
-            val priceCents = ((priceText.toDoubleOrNull() ?: 0.0)).roundToInt()
+            val priceCents: Long = ((priceText.toDoubleOrNull() ?: 0.0)).roundToLong()
+            val qtyInt = quantity.toIntOrNull() ?: 1
 
-            vm.createListing(
-                title = title,
-                description = description,
-                categoryId = categoryId,
-                brandId = brandId.ifBlank { null },
-                priceCents = priceCents,
-                currency = "COP",
-                condition = condition,
-                quantity = quantity.toIntOrNull() ?: 1,
-                imageUri = imageUri
-            ) { ok, message ->
-                if (ok) {
-                    Toast.makeText(ctx, message ?: "Listing created!", Toast.LENGTH_SHORT).show()
-                    onSaved()
+            scope.launch(Dispatchers.IO) {
+                if (!hasToken) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(ctx, "Protected view. Please sign in.", Toast.LENGTH_SHORT).show()
+                    }
+                    return@launch
+                }
+
+                // Persist image (copy to app cache) to avoid later permission issues
+                val persistedImage = imageUri?.let { safeCopyUriToCache(ctx, it) } ?: imageUri
+
+                if (isOnline) {
+                    withContext(Dispatchers.Main) {
+                        vm.createListing(
+                            title = title.trim(),
+                            description = description.trim(),
+                            categoryId = categoryId,
+                            brandId = brandId.ifBlank { null },
+                            priceCents = priceCents,
+                            currency = "COP",
+                            condition = condition,
+                            quantity = qtyInt,
+                            imageUri = persistedImage
+                        ) { ok, message ->
+                            if (ok) {
+                                Toast.makeText(ctx, message ?: "Listing created!", Toast.LENGTH_SHORT).show()
+                                onSaved()
+                            } else {
+                                // Encolar en Room y avisar
+                                scope.launch(Dispatchers.IO) {
+                                    pendingRepo.enqueue(
+                                        title = title.trim(),
+                                        description = description.trim(),
+                                        categoryId = categoryId,
+                                        brandId = brandId.ifBlank { null },
+                                        priceCents = priceCents,
+                                        currency = "COP",
+                                        condition = condition,
+                                        quantity = qtyInt,
+                                        imageUri = persistedImage
+                                    )
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(
+                                            ctx,
+                                            "Failed to publish. Saved offline and will auto-publish when online.",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                        onSaved()
+                                    }
+                                }
+                            }
+                        }
+                    }
                 } else {
-                    Toast.makeText(ctx, message ?: "Error creating listing", Toast.LENGTH_SHORT).show()
+                    // Offline: encolar directamente en Room
+                    pendingRepo.enqueue(
+                        title = title.trim(),
+                        description = description.trim(),
+                        categoryId = categoryId,
+                        brandId = brandId.ifBlank { null },
+                        priceCents = priceCents,
+                        currency = "COP",
+                        condition = condition,
+                        quantity = qtyInt,
+                        imageUri = persistedImage
+                    )
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            ctx,
+                            "Saved offline. It will auto-publish when online.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        onSaved()
+                    }
                 }
             }
         },
         onCreateCategory = { name ->
-            runCatching {
-                listingApi.createCategory(
-                    ListingApi.CreateCategoryIn(
-                        slug = slugify(name),
-                        name = name.trim()
+            if (!isOnline) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(ctx, "You are offline. Category cannot be created.", Toast.LENGTH_SHORT).show()
+                }
+                null
+            } else {
+                runCatching {
+                    listingApi.createCategory(
+                        ListingApi.CreateCategoryIn(
+                            slug = slugify(name),
+                            name = name.trim()
+                        )
                     )
-                )
-            }.onSuccess { vm.refreshCatalogs() }.getOrNull()
+                }.onSuccess { vm.refreshCatalogs() }.getOrNull()
+            }
         },
         onCreateBrand = { name, categoryId ->
-            if (categoryId.isNullOrBlank()) {
+            if (categoryId.isNullOrBlank()) return@AddProductScreen null
+            if (!isOnline) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(ctx, "You are offline. Brand cannot be created.", Toast.LENGTH_SHORT).show()
+                }
                 null
             } else {
                 runCatching {
@@ -176,7 +441,7 @@ fun AddProductRoute(
     )
 }
 
-/** SCREEN: sólo UI */
+/** SCREEN: UI only */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddProductScreen(
@@ -207,23 +472,40 @@ fun AddProductScreen(
     var condition by remember { mutableStateOf("used") }
     var quantity by remember { mutableStateOf("1") }
 
-    // Imagen
+    // Image
     var imageUri by remember { mutableStateOf<Uri?>(null) }
     var cameraTempUri by remember { mutableStateOf<Uri?>(null) }
 
-    // Galería
+    // Gallery (no persistable permission → we copy to cache on save)
     val pickImage = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri -> if (uri != null) imageUri = uri }
 
-    // Cámara
+    // Camera via MediaStore (no FileProvider required)
     val takePicture = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
         if (success) imageUri = cameraTempUri
     }
 
-    // Ubicación guardada
+    // 🔐 Launcher para pedir permiso de cámara en runtime
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            val temp = createCameraImageUri(ctx)
+            if (temp == null) {
+                Toast.makeText(ctx, "Cannot open camera.", Toast.LENGTH_SHORT).show()
+            } else {
+                cameraTempUri = temp
+                takePicture.launch(temp)
+            }
+        } else {
+            Toast.makeText(ctx, "Camera permission denied.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Location (preview only)
     val store = remember { LocationStore(ctx) }
     val lat by store.lastLatitudeFlow.collectAsStateWithLifecycle(initialValue = null)
     val lon by store.lastLongitudeFlow.collectAsStateWithLifecycle(initialValue = null)
@@ -231,13 +513,12 @@ fun AddProductScreen(
     // Bitmap preview
     val previewBitmap by rememberBitmapFromUri(ctx, imageUri)
 
-    // Diálogos “nuevo catálogo”
+    // Dialogs
     var showNewCategory by remember { mutableStateOf(false) }
     var showNewBrand by remember { mutableStateOf(false) }
     var newCatalogName by remember { mutableStateOf("") }
     var creating by remember { mutableStateOf(false) }
 
-    // Listas locales para refrescar al crear
     var localCategories by remember(categories) { mutableStateOf(categories) }
     var localBrands by remember(brands) { mutableStateOf(brands) }
 
@@ -281,7 +562,7 @@ fun AddProductScreen(
                 .imePadding(),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // ===== Imagen + preview =====
+            // Image + preview
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -316,27 +597,38 @@ fun AddProductScreen(
                         colors = ButtonDefaults.outlinedButtonColors(
                             containerColor = Color.White,
                             contentColor = GreenDark
-                        ),
-                        border = BorderStroke(1.dp, GreenDark)
+                        )
                     ) { Text("Gallery") }
 
                     OutlinedButton(
                         onClick = {
-                            val temp = createTempImageUri(ctx)
-                            cameraTempUri = temp
-                            takePicture.launch(temp)
+                            val hasPermission = ContextCompat.checkSelfPermission(
+                                ctx,
+                                Manifest.permission.CAMERA
+                            ) == PackageManager.PERMISSION_GRANTED
+
+                            if (hasPermission) {
+                                val temp = createCameraImageUri(ctx)
+                                if (temp == null) {
+                                    Toast.makeText(ctx, "Cannot open camera.", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    cameraTempUri = temp
+                                    takePicture.launch(temp)
+                                }
+                            } else {
+                                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                            }
                         },
                         shape = RoundedCornerShape(24.dp),
                         colors = ButtonDefaults.outlinedButtonColors(
                             containerColor = Color.White,
                             contentColor = GreenDark
-                        ),
-                        border = BorderStroke(1.dp, GreenDark)
+                        )
                     ) { Text("Camera") }
                 }
             }
 
-            // ===== Campos =====
+            // Title
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it.take(MAX_TITLE) },
@@ -347,6 +639,7 @@ fun AddProductScreen(
                 supportingText = { Text("${title.length} / $MAX_TITLE") }
             )
 
+            // Price
             OutlinedTextField(
                 value = price,
                 onValueChange = { raw ->
@@ -369,7 +662,7 @@ fun AddProductScreen(
                 supportingText = { Text("${price.length} / $MAX_PRICE_LEN") }
             )
 
-            // ===== Category =====
+            // Category
             var catExpanded by remember { mutableStateOf(false) }
             ExposedDropdownMenuBox(
                 expanded = catExpanded,
@@ -411,7 +704,7 @@ fun AddProductScreen(
                 }
             }
 
-            // ===== Brand =====
+            // Brand
             var brandExpanded by remember { mutableStateOf(false) }
             ExposedDropdownMenuBox(
                 expanded = brandExpanded,
@@ -517,7 +810,7 @@ fun AddProductScreen(
                 )
             )
 
-            // ===== Ubicación: mapa (sin mostrar coordenadas) =====
+            // Location preview
             Divider()
             Text("Location", color = GreenDark, style = MaterialTheme.typography.titleSmall)
             if (lat != null && lon != null) {
@@ -540,17 +833,17 @@ fun AddProductScreen(
         }
     }
 
-    /* ===== Diálogo: Nueva categoría ===== */
+    /* New category dialog */
     if (showNewCategory) {
         AlertDialog(
             onDismissRequest = { if (!creating) showNewCategory = false },
-            title = { Text("Nueva categoría") },
+            title = { Text("New category") },
             text = {
                 OutlinedTextField(
                     value = newCatalogName,
                     onValueChange = { newCatalogName = it.take(MAX_NEW_CATALOG_NAME) },
                     singleLine = true,
-                    label = { Text("Nombre") },
+                    label = { Text("Name") },
                     supportingText = { Text("${newCatalogName.length} / $MAX_NEW_CATALOG_NAME") }
                 )
             },
@@ -565,37 +858,38 @@ fun AddProductScreen(
                             if (created != null) {
                                 localCategories = (localCategories + created).distinctBy { it.id }
                                 selectedCat = created.id
-                                Toast.makeText(ctx, "Categoría creada", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(ctx, "Category created.", Toast.LENGTH_SHORT).show()
+                                AddProductCatalogCache.saveCategories(ctx, localCategories)
                                 showNewCategory = false
                             } else {
-                                Toast.makeText(ctx, "No se pudo crear la categoría", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(ctx, "Could not create category.", Toast.LENGTH_SHORT).show()
                             }
                         }
                     }
-                ) { Text(if (creating) "Creando…" else "Crear") }
+                ) { Text(if (creating) "Creating…" else "Create") }
             },
             dismissButton = {
-                TextButton(enabled = !creating, onClick = { showNewCategory = false }) { Text("Cancelar") }
+                TextButton(enabled = !creating, onClick = { showNewCategory = false }) { Text("Cancel") }
             }
         )
     }
 
-    /* ===== Diálogo: Nueva marca ===== */
+    /* New brand dialog */
     if (showNewBrand) {
         AlertDialog(
             onDismissRequest = { if (!creating) showNewBrand = false },
-            title = { Text("Nueva marca") },
+            title = { Text("New brand") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = newCatalogName,
                         onValueChange = { newCatalogName = it.take(MAX_NEW_CATALOG_NAME) },
                         singleLine = true,
-                        label = { Text("Nombre") },
+                        label = { Text("Name") },
                         supportingText = { Text("${newCatalogName.length} / $MAX_NEW_CATALOG_NAME") }
                     )
                     val catName = localCategories.firstOrNull { it.id == selectedCat }?.name ?: "—"
-                    Text("Se asociará a la categoría: $catName", color = Color(0xFF6B7783))
+                    Text("It will be linked to: $catName", color = Color(0xFF6B7783))
                 }
             },
             confirmButton = {
@@ -609,23 +903,24 @@ fun AddProductScreen(
                             if (created != null) {
                                 localBrands = (localBrands + created).distinctBy { it.id }
                                 selectedBrand = created.id
-                                Toast.makeText(ctx, "Marca creada", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(ctx, "Brand created.", Toast.LENGTH_SHORT).show()
+                                AddProductCatalogCache.saveBrands(ctx, localBrands)
                                 showNewBrand = false
                             } else {
-                                Toast.makeText(ctx, "No se pudo crear la marca", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(ctx, "Could not create brand.", Toast.LENGTH_SHORT).show()
                             }
                         }
                     }
-                ) { Text(if (creating) "Creando…" else "Crear") }
+                ) { Text(if (creating) "Creating…" else "Create") }
             },
             dismissButton = {
-                TextButton(enabled = !creating, onClick = { showNewBrand = false }) { Text("Cancelar") }
+                TextButton(enabled = !creating, onClick = { showNewBrand = false }) { Text("Cancel") }
             }
         )
     }
 }
 
-/* ------------------- Mapa preview (sin coordenadas) ------------------- */
+/* ------------------- Map preview ------------------- */
 @Composable
 private fun MapPreviewCard(lat: Double, lon: Double) {
     val pos = LatLng(lat, lon)
@@ -649,25 +944,46 @@ private fun MapPreviewCard(lat: Double, lon: Double) {
                 compassEnabled = false
             )
         ) {
-            Marker(
-                state = MarkerState(pos),
-                title = "Listing location"
-            )
+            Marker(state = MarkerState(pos), title = "Listing location")
         }
     }
 }
 
-/* ------------------- Helpers de imagen ------------------- */
+/* ------------------- Image helpers ------------------- */
 
-// Genera un archivo temporal y devuelve su Uri via FileProvider
-private fun createTempImageUri(context: Context): Uri {
-    val tempDir = File(context.cacheDir, "images").apply { mkdirs() }
-    val tempFile = File.createTempFile("camera_", ".jpg", tempDir)
-    val authority = "${context.packageName}.fileprovider"
-    return FileProvider.getUriForFile(context, authority, tempFile)
+// Use MediaStore to create a content Uri for the camera (no FileProvider needed)
+private fun createCameraImageUri(context: Context): Uri? {
+    return try {
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, "tm_${System.currentTimeMillis()}.jpg")
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            if (Build.VERSION.SDK_INT >= 29) {
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/TechMarketplace")
+            }
+        }
+        context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+    } catch (_: Throwable) {
+        null
+    }
 }
 
-// Carga un Bitmap desde un Uri de manera segura (IO → main)
+// Copy any Uri to app cache to avoid permission surprises on later flush
+private fun safeCopyUriToCache(context: Context, source: Uri): Uri? {
+    return try {
+        val dir = File(context.cacheDir, "upload_cache").apply { mkdirs() }
+        val outFile = File(dir, "img_${System.currentTimeMillis()}.jpg")
+        context.contentResolver.openInputStream(source)?.use { input ->
+            FileOutputStream(outFile).use { output ->
+                input.copyTo(output)
+            }
+        }
+        Uri.fromFile(outFile)
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+// Load Bitmap safely (IO → main)
 @Composable
 private fun rememberBitmapFromUri(
     context: Context,
@@ -679,9 +995,11 @@ private fun rememberBitmapFromUri(
             null
         } else {
             withContext(Dispatchers.IO) {
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    BitmapFactory.decodeStream(input)
-                }
+                runCatching {
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        BitmapFactory.decodeStream(input)
+                    }
+                }.getOrNull()
             }
         }
     }

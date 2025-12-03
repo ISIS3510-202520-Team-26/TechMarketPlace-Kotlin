@@ -53,7 +53,7 @@ interface ListingApi {
         @Query("mine") mine: Boolean? = null,
         @Query("seller_id") sellerId: String? = null,
         @Query("page") page: Int? = 1,
-        @Query("page_size") pageSize: Int? = 20
+        @Query("page_size") pageSize: Int? = null
     ): SearchListingsResponse
 
     // ---- Detalle ----

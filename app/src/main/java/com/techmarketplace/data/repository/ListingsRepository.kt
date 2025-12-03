@@ -1,4 +1,3 @@
-//app/src/main/java/com/techmarketplace/repo/ListingsRepository.kt
 package com.techmarketplace.data.repository
 
 import com.techmarketplace.data.remote.api.ListingApi
@@ -23,6 +22,7 @@ class ListingsRepository(
 
     companion object {
         private const val HOME_FEED_PAGE = 1
+        private const val HOME_FEED_PAGE_SIZE = 120  // 👈 Tamaño de página para el "All" del home
     }
 
     // -------- Catálogos ----------
@@ -34,7 +34,7 @@ class ListingsRepository(
     // -------- Mis publicaciones --------
     suspend fun myListings(
         page: Int = 1,
-        pageSize: Int = 20
+        pageSize: Int
     ): Result<SearchListingsResponse> = safeCall {
         api.searchListings(
             mine = true,
@@ -47,7 +47,7 @@ class ListingsRepository(
     suspend fun listingsBySeller(
         sellerId: String,
         page: Int = 1,
-        pageSize: Int = 20
+        pageSize: Int
     ): Result<SearchListingsResponse> = safeCall {
         api.searchListings(
             sellerId = sellerId,
@@ -67,7 +67,7 @@ class ListingsRepository(
         nearLon: Double? = null,
         radiusKm: Double? = null,
         page: Int? = 1,
-        pageSize: Int? = 20,
+        pageSize: Int?,
         // NEW: permite reutilizar esta misma función en perfil
         mine: Boolean? = null,
         sellerId: String? = null
@@ -86,6 +86,13 @@ class ListingsRepository(
             sellerId = sellerId
         )
 
+        // 👇 Para el home "All" forzamos 120; para el resto usamos el pageSize recibido
+        val effectivePageSize: Int? = if (isFrontPageRequest) {
+            HOME_FEED_PAGE_SIZE
+        } else {
+            pageSize
+        }
+
         val cacheStore = homeFeedCacheStore
         if (!isFrontPageRequest || cacheStore == null) {
             return safeCall {
@@ -99,7 +106,7 @@ class ListingsRepository(
                     nearLon = nearLon,
                     radiusKm = radiusKm,
                     page = page,
-                    pageSize = pageSize,
+                    pageSize = effectivePageSize,
                     mine = mine,
                     sellerId = sellerId
                 )
@@ -122,7 +129,7 @@ class ListingsRepository(
                 nearLon = nearLon,
                 radiusKm = radiusKm,
                 page = page,
-                pageSize = pageSize,
+                pageSize = effectivePageSize,
                 mine = mine,
                 sellerId = sellerId
             )
@@ -189,7 +196,7 @@ class ListingsRepository(
         description: String,
         categoryId: String,
         brandId: String? = null,
-        priceCents: Int,
+        priceCents: Long,
         currency: String = "COP",
         condition: String,
         quantity: Int = 1,
@@ -241,18 +248,17 @@ class ListingsRepository(
     ): Boolean {
         val normalizedQuery = q?.takeIf { it.isNotBlank() }
         return (page ?: HOME_FEED_PAGE) == HOME_FEED_PAGE &&
-            normalizedQuery == null &&
-            categoryId == null &&
-            brandId == null &&
-            minPrice == null &&
-            maxPrice == null &&
-            nearLat == null &&
-            nearLon == null &&
-            radiusKm == null &&
-            mine != true &&
-            sellerId == null
+                normalizedQuery == null &&
+                categoryId == null &&
+                brandId == null &&
+                minPrice == null &&
+                maxPrice == null &&
+                nearLat == null &&
+                nearLon == null &&
+                radiusKm == null &&
+                mine != true &&
+                sellerId == null
     }
-
 }
 
 data class ListingDetailResult(

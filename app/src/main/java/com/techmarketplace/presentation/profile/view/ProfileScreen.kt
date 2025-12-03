@@ -1,6 +1,7 @@
 package com.techmarketplace.presentation.profile.view
 
 import android.util.LruCache
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -96,6 +97,30 @@ private fun stableImageKey(imageUrl: String?, storageKey: String?, id: String): 
         !imageUrl.isNullOrBlank() -> "url:${imageUrl.lowercase()}"
         else -> "id:$id" // fallback
     }
+}
+
+/* ---------- DELETE helpers (modo pruebas: borrar cualquier listing) ---------- */
+private fun buildDeleteUrls(baseRaw: String, id: String): List<String> {
+    val base = baseRaw.trimEnd('/')
+    val lastSeg = base.substringAfterLast('/')
+    val hasV1 = lastSeg.equals("v1", ignoreCase = true)
+
+    val urls = buildList {
+        // Rutas sin /v1
+        add("$base/listings/$id")
+        add("$base/listings/$id?force=1")
+        add("$base/admin/listings/$id")
+        add("$base/admin/listings/$id?force=1")
+
+        // Rutas con /v1 (solo si el base no termina ya en /v1)
+        if (!hasV1) {
+            add("$base/v1/listings/$id")
+            add("$base/v1/listings/$id?force=1")
+            add("$base/v1/admin/listings/$id")
+            add("$base/v1/admin/listings/$id?force=1")
+        }
+    }
+    return urls.distinct()
 }
 
 @Composable
@@ -251,51 +276,68 @@ fun ProfileScreen(
         }
     }
 
-    // Owner check (cache-first)
-    suspend fun isOwner(listingId: String, expectedUserId: String): Boolean {
-        val cached = profileCache.loadAll(expectedUserId).any { it.id == listingId }
-        if (cached) return true
-        return runCatching {
-            val detail = listingsRepository.getListingDetail(listingId, preferCache = true)
-            detail.detail.sellerId == expectedUserId
-        }.getOrDefault(false)
-    }
-
-    // Delete (solo online)
+    // Delete (modo pruebas: sin verificar dueño)
     var pendingDeleteId by remember { mutableStateOf<String?>(null) }
     val snackbar = remember { SnackbarHostState() }
+
     fun confirmDelete(id: String) {
-        val sid = userId ?: return
         scope.launch(Dispatchers.IO) {
-            val owner = isOwner(id, sid)
-            if (!owner) {
-                withContext(Dispatchers.Main) { snackbar.showSnackbar("You cannot delete this post.") }
-                pendingDeleteId = null; return@launch
-            }
             if (!isOnline) {
                 withContext(Dispatchers.Main) { snackbar.showSnackbar("Cannot delete while offline.") }
-                pendingDeleteId = null; return@launch
+                pendingDeleteId = null
+                return@launch
             }
+
+            val base = BuildConfig.API_BASE_URL
+            val urls = buildDeleteUrls(base, id)
+
             val client = OkHttpClient()
-            val req = Request.Builder()
-                .url("${BuildConfig.API_BASE_URL.trimEnd('/')}/listings/$id")
-                .delete()
-                .apply { accessToken?.let { header("Authorization", "Bearer $it") } }
-                .build()
-            val resp = runCatching { client.newCall(req).execute() }.getOrNull()
-            if (resp == null) {
-                withContext(Dispatchers.Main) { snackbar.showSnackbar("Network error while deleting.") }
-            } else resp.use {
-                if (it.isSuccessful) {
-                    profileCache.deleteById(id)
-                    withContext(Dispatchers.Main) {
-                        listings = listings.filterNot { L -> L.id == id }
-                        cachedListings = cachedListings.filterNot { L -> L.id == id }
-                        snackbar.showSnackbar("Listing deleted")
+            var ok = false
+            var lastCode: Int? = null
+            var lastBody: String? = null
+
+            // Usa token actual; si aún no está en memoria, lee de store.
+            val token = accessToken ?: runCatching { tokenStore.getAccessTokenOnce() }.getOrNull()
+
+            for (url in urls) {
+                try {
+                    Log.d("ProfileDelete", "DELETE -> $url")
+                    val rb = Request.Builder()
+                        .url(url)
+                        .delete()
+                        .header("Accept", "application/json")
+                        .header("X-Force-Delete", "1")
+
+                    if (!token.isNullOrBlank()) rb.header("Authorization", "Bearer $token")
+
+                    client.newCall(rb.build()).execute().use { resp ->
+                        lastCode = resp.code
+                        lastBody = runCatching { resp.body?.string() }.getOrNull()
+                        Log.d("ProfileDelete", "DELETE <- code=${resp.code} body=${lastBody?.take(256)}")
+                        ok = resp.isSuccessful
                     }
-                } else {
-                    withContext(Dispatchers.Main) { snackbar.showSnackbar("Delete failed (HTTP ${it.code})") }
+                    if (ok) break
+                } catch (t: Throwable) {
+                    lastBody = t.message
+                    Log.d("ProfileDelete", "DELETE failed: ${t.message}")
                 }
+            }
+
+            if (ok) {
+                // Actualiza caches/UI
+                profileCache.deleteById(id)
+                withContext(Dispatchers.Main) {
+                    listings = listings.filterNot { it.id == id }
+                    cachedListings = cachedListings.filterNot { it.id == id }
+                    snackbar.showSnackbar("Listing deleted")
+                }
+            } else {
+                val msg = buildString {
+                    append("Delete failed")
+                    if (lastCode != null) append(" (HTTP $lastCode)")
+                    if (!lastBody.isNullOrBlank()) append(": ").append(lastBody!!.take(120))
+                }
+                withContext(Dispatchers.Main) { snackbar.showSnackbar(msg) }
             }
             pendingDeleteId = null
         }
@@ -492,16 +534,8 @@ fun ProfileScreen(
                                         },
                                         onClick = { onOpenListing(item.id) },
                                         onDelete = {
-                                            val sid = userId
-                                            if (sid == null) {
-                                                scope.launch { snackbar.showSnackbar("User not loaded yet.") }
-                                            } else {
-                                                scope.launch {
-                                                    val owner = isOwner(item.id, sid)
-                                                    if (!owner) snackbar.showSnackbar("You cannot delete this post.")
-                                                    else pendingDeleteId = item.id
-                                                }
-                                            }
+                                            // Modo pruebas: permitir borrar sin validar propietario
+                                            pendingDeleteId = item.id
                                         }
                                     )
                                     if (index >= listings.lastIndex - 2 && hasNext && isOnline && !loading) {
@@ -595,8 +629,12 @@ private fun ListingRow(
             Column(Modifier.weight(1f)) {
                 Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
                 Spacer(Modifier.height(4.dp))
-                Text(formatCop(item.priceCents), style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                Text(
+                    formatCop(item.priceCents),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
 
             IconButton(onClick = onDelete, enabled = isOnline) {
@@ -660,8 +698,12 @@ private fun ListingRowCached(
             Column(Modifier.weight(1f)) {
                 Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
                 Spacer(Modifier.height(4.dp))
-                Text(formatCop(item.priceCents), style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                Text(
+                    formatCop(item.priceCents),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
 
             IconButton(onClick = onDelete) {
@@ -671,7 +713,9 @@ private fun ListingRowCached(
     }
 }
 
-private fun formatCop(priceCents: Int): String {
-    val pesos = priceCents / 100.0
-    return "COP ${"%,.0f".format(pesos)}"
+private fun formatCop(priceCents: Long?): String {
+    if (priceCents == null) return "COP —"
+    val nf = java.text.NumberFormat.getIntegerInstance(java.util.Locale("es", "CO"))
+    nf.maximumFractionDigits = 0
+    return "COP ${nf.format(priceCents)}"
 }

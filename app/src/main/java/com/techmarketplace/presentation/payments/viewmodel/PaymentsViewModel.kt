@@ -195,7 +195,7 @@ class PaymentsViewModel(
 
 data class PaymentsUiState(
     val cartItems: List<CartItem> = emptyList(),
-    val totalCents: Int = 0,
+    val totalCents: Long = 0,
     val currency: String = "COP",
     val isOnline: Boolean = true,
     val isProcessing: Boolean = false,
