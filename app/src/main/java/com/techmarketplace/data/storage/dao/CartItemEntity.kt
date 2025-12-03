@@ -11,7 +11,7 @@ data class CartItemEntity(
     val serverId: String? = null,
     val productId: String,
     val title: String,
-    val priceCents: Int,
+    val priceCents: Long,
     val currency: String,
     val quantity: Int,
     val variantDetails: List<CartVariantDetail> = emptyList(),

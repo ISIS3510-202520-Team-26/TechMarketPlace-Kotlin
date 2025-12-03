@@ -64,7 +64,7 @@ class ListingsViewModel(
         description: String,
         categoryId: String,
         brandId: String?,
-        priceCents: Int,
+        priceCents: Long,
         currency: String,
         condition: String,
         quantity: Int,

@@ -18,7 +18,7 @@ data class PriceSuggestionOut(
 data class OrderCreateIn(
     @SerialName("listing_id") val listingId: String,
     @SerialName("quantity") val quantity: Int = 1,
-    @SerialName("total_cents") val totalCents: Int? = null,
+    @SerialName("total_cents") val totalCents: Long? = null,
     @SerialName("currency") val currency: String? = null,
     @SerialName("buyer_id") val buyerId: String? = null
 )

@@ -9,7 +9,7 @@ data class CreateListingRequest(
     @SerialName("description") val description: String,
     @SerialName("category_id") val categoryId: String,
     @SerialName("brand_id") val brandId: String? = null,
-    @SerialName("price_cents") val priceCents: Int,
+    @SerialName("price_cents") val priceCents: Long,
     @SerialName("currency") val currency: String = "COP",
     @SerialName("condition") val condition: String = "used",
     @SerialName("quantity") val quantity: Int = 1,
