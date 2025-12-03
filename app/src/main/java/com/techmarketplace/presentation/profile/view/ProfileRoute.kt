@@ -10,13 +10,15 @@ fun ProfileRoute(
     onOpenListing: (String) -> Unit,
     onSignOut: () -> Unit,
     onOpenTelemetry: (String) -> Unit,
-    onOpenDemand: (String) -> Unit
+    onOpenDemand: (String) -> Unit,
+    onOpenPriceCoach: (String) -> Unit
 ) {
     ProfileScreen(
         onNavigateBottom = onNavigateBottom,
         onOpenListing = onOpenListing,
         onSignOut = onSignOut,
         onOpenTelemetry = onOpenTelemetry,
-        onOpenDemand = onOpenDemand
+        onOpenDemand = onOpenDemand,
+        onOpenPriceCoach = onOpenPriceCoach
     )
 }

@@ -1,6 +1,7 @@
 package com.techmarketplace.data.storage.dao
 
 import androidx.room.TypeConverter
+import com.techmarketplace.data.remote.dto.ListingSummaryDto
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.encodeToString
@@ -11,6 +12,7 @@ object TelemetryTypeConverters {
     private val rankingSerializer = ListSerializer(SellerRankingEntryEntity.serializer())
     private val demandCategorySerializer = ListSerializer(DemandCategoryStatEntity.serializer())
     private val demandButtonSerializer = ListSerializer(DemandButtonStatEntity.serializer())
+    private val listingSummarySerializer = ListSerializer(ListingSummaryDto.serializer())
     private val stringListSerializer = ListSerializer(String.serializer())
 
     @TypeConverter
@@ -36,6 +38,14 @@ object TelemetryTypeConverters {
     @TypeConverter
     fun fromDemandButton(entries: List<DemandButtonStatEntity>): String =
         json.encodeToString(demandButtonSerializer, entries)
+
+    @TypeConverter
+    fun toListingSummaries(jsonString: String?): List<ListingSummaryDto> =
+        jsonString?.let { json.decodeFromString(listingSummarySerializer, it) } ?: emptyList()
+
+    @TypeConverter
+    fun fromListingSummaries(entries: List<ListingSummaryDto>): String =
+        json.encodeToString(listingSummarySerializer, entries)
 
     @TypeConverter
     fun toStringList(jsonString: String?): List<String> =

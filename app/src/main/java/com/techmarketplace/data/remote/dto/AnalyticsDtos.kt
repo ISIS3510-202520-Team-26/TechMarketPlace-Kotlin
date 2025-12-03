@@ -24,3 +24,16 @@ data class BqQuickViewCountDto(
     @SerialName("category_id") val categoryId: String,
     val count: Int
 )
+
+@Serializable
+data class BqDauDto(
+    val day: String,
+    val dau: Int
+)
+
+@Serializable
+data class BqGmvDto(
+    val day: String,
+    @SerialName("gmv_cents") val gmvCents: Int,
+    @SerialName("orders_paid") val ordersPaid: Int
+)

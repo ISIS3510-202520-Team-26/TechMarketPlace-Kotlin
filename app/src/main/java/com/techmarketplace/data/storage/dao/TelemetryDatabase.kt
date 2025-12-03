@@ -5,16 +5,25 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import com.techmarketplace.data.storage.dao.RecommendedItemsEntity
+import com.techmarketplace.data.storage.dao.PriceCoachSnapshotEntity
 
 @Database(
-    entities = [SellerResponseMetricsEntity::class, SellerDemandSnapshotEntity::class],
-    version = 2,
+    entities = [
+        SellerResponseMetricsEntity::class,
+        SellerDemandSnapshotEntity::class,
+        RecommendedItemsEntity::class,
+        PriceCoachSnapshotEntity::class
+    ],
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(TelemetryTypeConverters::class)
 abstract class TelemetryDatabase : RoomDatabase() {
     abstract fun sellerMetricsDao(): SellerMetricsDao
     abstract fun sellerDemandDao(): SellerDemandDao
+    abstract fun recommendedDao(): RecommendedDao
+    abstract fun priceCoachDao(): PriceCoachDao
 }
 
 object TelemetryDatabaseProvider {
