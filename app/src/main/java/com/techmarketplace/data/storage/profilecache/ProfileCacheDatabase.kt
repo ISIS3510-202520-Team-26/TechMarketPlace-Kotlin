@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [UserListingEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class ProfileCacheDatabase : RoomDatabase() {
