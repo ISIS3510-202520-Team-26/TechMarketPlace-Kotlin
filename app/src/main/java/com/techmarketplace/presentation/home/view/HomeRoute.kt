@@ -715,6 +715,9 @@ fun HomeRoute(
                 products = cachedProducts
             }
         }
+        if (recommended.isEmpty()) {
+            fetchRecommended()
+        }
     }
 
     // Refrescar cada vez que el Home entra en ON_START (al entrar a la pantalla)
@@ -733,15 +736,17 @@ fun HomeRoute(
 
     // Auto-refresh periódico mientras haya conexión
     LaunchedEffect(isOnline) {
-        if (!isOnline) return@LaunchedEffect
-        // Al recuperar conexión: refresco inmediato
-        fetchListings()
-        while (true) {
-            delay(2 * 60 * 1000L) // cada 2 minutos
+        if (isOnline) {
+            // Al recuperar conexión: refresco inmediato
             fetchListings()
-            if (recommended.isEmpty()) fetchRecommended()
+            while (true) {
+                delay(2 * 60 * 1000L) // cada 2 minutos
+                fetchListings()
+                if (recommended.isEmpty()) fetchRecommended()
+            }
         } else if (recommended.isEmpty()) {
-            fetchRecommended() // will read cached if available
+            // Offline: intenta rellenar con caché
+            fetchRecommended()
         }
     }
 

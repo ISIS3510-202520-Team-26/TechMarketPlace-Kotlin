@@ -160,8 +160,8 @@ fun ProfileScreen(
     var accessToken by remember { mutableStateOf<String?>(null) }
 
     // ===== Listings =====
-    var listings by rememberSaveable { mutableStateOf<List<ListingSummaryDto>>(emptyList()) }
-    var cachedListings by rememberSaveable { mutableStateOf<List<UserListingEntity>>(emptyList()) }
+    var listings by remember { mutableStateOf<List<ListingSummaryDto>>(emptyList()) }
+    var cachedListings by remember { mutableStateOf<List<UserListingEntity>>(emptyList()) }
     var page by rememberSaveable { mutableStateOf(1) }
     var hasNext by rememberSaveable { mutableStateOf(true) }
     var loading by remember { mutableStateOf(false) }
